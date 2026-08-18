@@ -1,0 +1,213 @@
+name: ci-validation-$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger: none
+
+pr:
+  branches:
+    include:
+      - development
+      - main
+
+pool:
+  name: Default
+
+variables:
+  artifactName: drop
+
+stages:
+- stage: Validate
+  displayName: Validate repository
+  jobs:
+  - job: CI
+    displayName: CI validation
+    steps:
+    - checkout: self
+      clean: true
+
+    - task: PowerShell@2
+      displayName: Detect stack
+      inputs:
+        pwsh: false
+        targetType: inline
+        script: |
+          $ErrorActionPreference = "Stop"
+
+          if (Test-Path "package.json") {
+            Write-Host "##vso[task.setvariable variable=HAS_NODE]true"
+          } else {
+            Write-Host "##vso[task.setvariable variable=HAS_NODE]false"
+          }
+
+          if ((Test-Path "requirements.txt") -or (Test-Path "pyproject.toml")) {
+            Write-Host "##vso[task.setvariable variable=HAS_PYTHON]true"
+          } else {
+            Write-Host "##vso[task.setvariable variable=HAS_PYTHON]false"
+          }
+
+          if ((Get-ChildItem -Path . -Recurse -Depth 3 -Filter "*.sln" -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0 -or (Get-ChildItem -Path . -Recurse -Depth 3 -Filter "*.csproj" -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
+            Write-Host "##vso[task.setvariable variable=HAS_DOTNET]true"
+          } else {
+            Write-Host "##vso[task.setvariable variable=HAS_DOTNET]false"
+          }
+
+    - task: NodeTool@0
+      displayName: Setup Node.js 20
+      condition: eq(variables.HAS_NODE, 'true')
+      inputs:
+        versionSpec: '20.x'
+
+    - task: PowerShell@2
+      displayName: Install Node dependencies
+      condition: eq(variables.HAS_NODE, 'true')
+      inputs:
+        pwsh: false
+        targetType: inline
+        script: |
+          npm ci
+
+    - task: PowerShell@2
+      displayName: Run Node validation
+      condition: eq(variables.HAS_NODE, 'true')
+      inputs:
+        pwsh: false
+        targetType: inline
+        script: |
+          $scripts = npm run 2>$null | Out-String
+          if ($scripts -match " lint") {
+            npm run lint
+          } else {
+            Write-Host "No lint script found. Skipping lint."
+          }
+
+          if ($scripts -match " test") {
+            npm test -- --runInBand
+          } else {
+            Write-Host "No test script found. Skipping tests."
+          }
+
+          if ($scripts -match " build") {
+            npm run build
+          } else {
+            Write-Host "No build script found. Skipping build."
+          }
+
+    - task: UsePythonVersion@0
+      displayName: Setup Python 3.11
+      condition: eq(variables.HAS_PYTHON, 'true')
+      inputs:
+        versionSpec: '3.11'
+
+    - task: PowerShell@2
+      displayName: Install Python dependencies
+      condition: eq(variables.HAS_PYTHON, 'true')
+      inputs:
+        pwsh: false
+        targetType: inline
+        script: |
+          python -m pip install --upgrade pip
+          if (Test-Path "requirements.txt") {
+            pip install -r requirements.txt
+          } elseif (Test-Path "pyproject.toml") {
+            pip install .
+          }
+
+    - task: PowerShell@2
+      displayName: Run Python validation
+      condition: eq(variables.HAS_PYTHON, 'true')
+      inputs:
+        pwsh: false
+        targetType: inline
+        script: |
+          try {
+            python -m pytest --version 2>$null | Out-Null
+            python -m pytest
+          } catch {
+            Write-Host "pytest is not configured. Skipping tests."
+          }
+
+    - task: UseDotNet@2
+      displayName: Setup .NET SDK
+      condition: eq(variables.HAS_DOTNET, 'true')
+      inputs:
+        packageType: sdk
+        version: 8.0.x
+
+    - task: PowerShell@2
+      displayName: Restore .NET
+      condition: eq(variables.HAS_DOTNET, 'true')
+      inputs:
+        pwsh: false
+        targetType: inline
+        script: |
+          $slnFiles = @(Get-ChildItem -Path . -Recurse -Depth 3 -Filter "*.sln" -ErrorAction SilentlyContinue)
+          if ($slnFiles.Count -gt 0) {
+            dotnet restore $slnFiles[0].FullName
+          } else {
+            dotnet restore
+          }
+
+    - task: PowerShell@2
+      displayName: Build .NET
+      condition: eq(variables.HAS_DOTNET, 'true')
+      inputs:
+        pwsh: false
+        targetType: inline
+        script: |
+          $slnFiles = @(Get-ChildItem -Path . -Recurse -Depth 3 -Filter "*.sln" -ErrorAction SilentlyContinue)
+          if ($slnFiles.Count -gt 0) {
+            dotnet build $slnFiles[0].FullName --configuration Release --no-restore
+          } else {
+            dotnet build --configuration Release --no-restore
+          }
+
+    - task: PowerShell@2
+      displayName: Test .NET
+      condition: eq(variables.HAS_DOTNET, 'true')
+      inputs:
+        pwsh: false
+        targetType: inline
+        script: |
+          $testProjects = @(Get-ChildItem -Path . -Recurse -Filter "*Tests.csproj" -ErrorAction SilentlyContinue)
+          if ($testProjects.Count -gt 0) {
+            dotnet test --configuration Release --no-build `
+              --logger "trx;LogFileName=test-results.trx" `
+              --results-directory "$(Build.ArtifactStagingDirectory)/test-results"
+          } else {
+            Write-Host "No .NET test projects found. Skipping tests."
+          }
+
+    - task: PublishTestResults@2
+      displayName: Publish .NET test results
+      condition: eq(variables.HAS_DOTNET, 'true')
+      inputs:
+        testResultsFormat: VSTest
+        testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-results/*.trx'
+      continueOnError: true
+
+    - task: PowerShell@2
+      displayName: Create bootstrap artifact
+      inputs:
+        pwsh: false
+        targetType: inline
+        script: |
+          $artifactRoot = Join-Path "$(Build.ArtifactStagingDirectory)" "bootstrap"
+          New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
+
+          $metadata = [ordered]@{
+            repository = "$(Build.Repository.Name)"
+            branch = "$(Build.SourceBranch)"
+            commit = "$(Build.SourceVersion)"
+            hasNode = "$(HAS_NODE)"
+            hasPython = "$(HAS_PYTHON)"
+            hasDotNet = "$(HAS_DOTNET)"
+            generatedAtUtc = [DateTime]::UtcNow.ToString("o")
+          }
+
+          $metadata | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $artifactRoot "pipeline-metadata.json")
+
+    - task: PublishBuildArtifacts@1
+      displayName: Publish bootstrap artifact
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: '$(artifactName)'
+        publishLocation: Container

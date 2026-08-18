@@ -1,0 +1,95 @@
+@page "/portal-vendedor/detalle-estrella/{DefinicionId:int}"
+@layout EmptyLayout
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Portal
+@using WebMultiempresa.Infrastructure.Persistence
+@inject ObtenerDetalleEstrellaDiariaQuery DetalleQuery
+@inject VendedorContexto                  VendedorCtx
+@inject NavigationManager                 Nav
+
+<div class="container" style="max-width:480px; padding:1rem;">
+    <button class="btn btn-outline-secondary btn-sm mb-3"
+            @onclick='() => Nav.NavigateTo("/portal-vendedor/dashboard")'>
+        ← Volver
+    </button>
+
+    <h5 style="text-align:center; color:#5555FF;">Detalle diario</h5>
+
+    @if (_cargando)
+    {
+        <div style="text-align:center; margin-top:40px;">
+            <span class="spinner-border" role="status"></span>
+        </div>
+    }
+    else if (!_datos.Any())
+    {
+        <p style="text-align:center; color:gray; margin-top:2rem;">Sin registros en el período.</p>
+    }
+    else
+    {
+        <table class="table table-striped table-sm">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Valor</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (PortalEstrellaDiariaDto fila in _datos)
+                {
+                    <tr>
+                        <td>@fila.Fecha.ToString("dd/MM/yyyy")</td>
+                        <td>@fila.Valor.ToString("N2")</td>
+                        <td style="color:@(fila.EstaEncendida ? "LawnGreen" : "OrangeRed"); font-size:1.1rem;">
+                            @(fila.EstaEncendida ? "★" : "☆")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    [Parameter] public int DefinicionId { get; set; }
+
+    private IReadOnlyList<PortalEstrellaDiariaDto> _datos    = [];
+    private bool                                    _cargando = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        if (VendedorCtx.VendedoresID is null)
+        {
+            Nav.NavigateTo("/portal-vendedor/login");
+            return;
+        }
+
+        DateTime hoy = DateTime.Today;
+        DateTime fechaDesde;
+        DateTime fechaHasta;
+
+        if (hoy.Day <= 2)
+        {
+            fechaDesde = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-1);
+            fechaHasta = new DateTime(hoy.Year, hoy.Month, 1).AddDays(-1);
+        }
+        else
+        {
+            fechaDesde = new DateTime(hoy.Year, hoy.Month, 1);
+            fechaHasta = hoy.AddDays(-1);
+        }
+
+        _datos = await DetalleQuery.HandleAsync(
+            VendedorCtx.VendedoresID.Value,
+            DefinicionId,
+            fechaDesde,
+            fechaHasta,
+            CancellationToken.None);
+
+        _cargando = false;
+        StateHasChanged();
+    }
+}

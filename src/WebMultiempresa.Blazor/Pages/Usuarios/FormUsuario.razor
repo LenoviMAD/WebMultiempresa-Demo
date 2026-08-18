@@ -1,0 +1,263 @@
+@page "/usuarios/nuevo"
+@page "/usuarios/{UsuariosID:int}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using WebMultiempresa.Application.Commands.Usuarios
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Empresas
+@using WebMultiempresa.Application.Queries.Usuarios
+@inject CrearUsuarioCommandHandler CrearHandler
+@inject EditarUsuarioCommandHandler EditarHandler
+@inject BajaUsuarioCommandHandler BajaHandler
+@inject ObtenerUsuarioQuery ObtenerQuery
+@inject ListarEmpresasQuery EmpresasQuery
+@inject NavigationManager Nav
+
+<PageTitle>@(_esNuevo ? "Nuevo usuario" : "Editar usuario")</PageTitle>
+
+<div class="form-page">
+    <div class="form-header">
+        <a href="/usuarios" class="back-link">&#8592; Usuarios</a>
+        <h2>@(_esNuevo ? "Nuevo usuario" : "Editar usuario")</h2>
+    </div>
+
+    @if (_cargando)
+    {
+        <div class="loading">Cargando...</div>
+    }
+    else
+    {
+        <div class="form-card">
+            <div class="form-group">
+                <label>Email <span class="required">*</span></label>
+                <input type="email"
+                       class="form-control @(TieneError("Email") ? "input-error" : "")"
+                       @bind="_modelo.Email"
+                       disabled="@(!_esNuevo)"
+                       placeholder="usuario@empresa.com" />
+                <ErrorMsg Mensaje="@Error("Email")" />
+            </div>
+
+            <div class="form-group">
+                <label>Nombre <span class="required">*</span></label>
+                <input type="text"
+                       class="form-control @(TieneError("Nombre") ? "input-error" : "")"
+                       @bind="_modelo.Nombre"
+                       placeholder="Nombre completo"
+                       maxlength="200" />
+                <ErrorMsg Mensaje="@Error("Nombre")" />
+            </div>
+
+            <div class="form-group">
+                <label>
+                    @(_esNuevo ? "Contraseña *" : "Nueva contraseña")
+                    @if (!_esNuevo)
+                    {
+                        <span class="hint">(dejar en blanco para mantener la actual)</span>
+                    }
+                </label>
+                <input type="password"
+                       class="form-control @(TieneError("Password") ? "input-error" : "")"
+                       @bind="_modelo.Password"
+                       placeholder="@(_esNuevo ? "Contraseña" : "••••••••")" />
+                <ErrorMsg Mensaje="@Error("Password")" />
+            </div>
+
+            <div class="form-group">
+                <label>Rol <span class="required">*</span></label>
+                <select class="form-control" @bind="_modelo.Rol">
+                    <option value="1">Admin</option>
+                    <option value="0">SuperAdmin</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Empresa</label>
+                <select class="form-control" @bind="_modelo.EmpresaIDStr">
+                    <option value="">— Sin empresa (SuperAdmin) —</option>
+                    @foreach (EmpresaDto empresa in _empresas)
+                    {
+                        <option value="@empresa.EmpresaID">@empresa.Nombre</option>
+                    }
+                </select>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_errorGeneral))
+            {
+                <div class="alert-error">@_errorGeneral</div>
+            }
+
+            <div class="form-actions">
+                @if (!_esNuevo)
+                {
+                    <button class="btn-danger" type="button" @onclick="AbrirModalBaja">Dar de baja</button>
+                }
+                <a href="/usuarios" class="btn-secondary">Cancelar</a>
+                <button class="btn-primary" type="button" @onclick="GuardarAsync" disabled="@_guardando">
+                    @(_guardando ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@if (_mostrarModalBaja)
+{
+    <div class="modal-overlay">
+        <div class="modal">
+            <h3>Confirmar baja</h3>
+            <p>¿Está seguro que desea dar de baja al usuario <strong>@_modelo.Nombre</strong>?</p>
+            <div class="modal-actions">
+                <button class="btn-secondary" @onclick="() => _mostrarModalBaja = false">Cancelar</button>
+                <button class="btn-danger" @onclick="EjecutarBajaAsync">Confirmar baja</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .form-page { max-width: 560px; margin: 0 auto; }
+    .form-header { margin-bottom: 1.5rem; }
+    .back-link { color: #2563eb; text-decoration: none; font-size: 0.875rem; }
+    .back-link:hover { text-decoration: underline; }
+    .form-header h2 { margin: 0.5rem 0 0; font-size: 1.5rem; font-weight: 700; color: #1e3a5f; }
+    .form-card { background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); padding: 1.75rem; }
+    .form-group { margin-bottom: 1.25rem; }
+    .form-group label { display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 0.375rem; }
+    .hint { font-weight: 400; color: #9ca3af; font-size: 0.8rem; margin-left: 0.375rem; }
+    .required { color: #dc2626; }
+    .form-control { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; color: #111827; box-sizing: border-box; }
+    .form-control:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+    .form-control:disabled { background: #f9fafb; color: #6b7280; }
+    .input-error { border-color: #dc2626; }
+    .alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.875rem; }
+    .form-actions { display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center; padding-top: 1rem; border-top: 1px solid #f3f4f6; margin-top: 0.5rem; }
+    .btn-primary { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 0.5rem 1.25rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-secondary { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; padding: 0.5rem 1.25rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; text-decoration: none; }
+    .btn-secondary:hover { background: #e5e7eb; }
+    .btn-danger { background: #dc2626; color: #fff; border: none; border-radius: 6px; padding: 0.5rem 1.25rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; margin-right: auto; }
+    .btn-danger:hover { background: #b91c1c; }
+    .loading { padding: 2rem; text-align: center; color: #6b7280; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal { background: #fff; border-radius: 10px; padding: 1.75rem; max-width: 420px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+    .modal h3 { margin: 0 0 0.75rem; font-size: 1.1rem; color: #1e3a5f; }
+    .modal p { color: #4b5563; font-size: 0.9rem; margin-bottom: 1.25rem; }
+    .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+</style>
+
+@code {
+    [Parameter] public int? UsuariosID { get; set; }
+
+    private bool _esNuevo => UsuariosID is null;
+    private bool _cargando = true;
+    private bool _guardando;
+    private bool _mostrarModalBaja;
+    private string _errorGeneral = string.Empty;
+    private Dictionary<string, string> _errores = new();
+    private List<EmpresaDto> _empresas = new();
+
+    private UsuarioFormModel _modelo = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        IReadOnlyList<EmpresaDto> empresas = await EmpresasQuery.HandleAsync(CancellationToken.None);
+        _empresas = empresas.ToList();
+
+        if (!_esNuevo)
+        {
+            UsuarioListadoDto? dto = await ObtenerQuery.HandleAsync(UsuariosID!.Value, CancellationToken.None);
+            if (dto is null)
+            {
+                Nav.NavigateTo("/usuarios");
+                return;
+            }
+            _modelo.Email = dto.Email;
+            _modelo.Nombre = dto.Nombre;
+            _modelo.Rol = dto.Rol;
+            _modelo.EmpresaIDStr = dto.EmpresaID?.ToString() ?? string.Empty;
+        }
+        _cargando = false;
+    }
+
+    private async Task GuardarAsync()
+    {
+        _errores.Clear();
+        _errorGeneral = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_modelo.Email))
+            _errores["Email"] = "El email es obligatorio.";
+        if (string.IsNullOrWhiteSpace(_modelo.Nombre))
+            _errores["Nombre"] = "El nombre es obligatorio.";
+        if (_esNuevo && string.IsNullOrWhiteSpace(_modelo.Password))
+            _errores["Password"] = "La contraseña es obligatoria para usuarios nuevos.";
+
+        if (_errores.Count > 0) return;
+
+        int? empresaId = int.TryParse(_modelo.EmpresaIDStr, out int eid) ? eid : null;
+
+        _guardando = true;
+        try
+        {
+            if (_esNuevo)
+            {
+                CrearUsuarioCommand cmd = new()
+                {
+                    Email = _modelo.Email,
+                    Nombre = _modelo.Nombre,
+                    Password = _modelo.Password,
+                    Rol = _modelo.Rol,
+                    EmpresaID = empresaId
+                };
+                int nuevoId = await CrearHandler.HandleAsync(cmd, CancellationToken.None);
+                Nav.NavigateTo($"/usuarios/{nuevoId}");
+            }
+            else
+            {
+                EditarUsuarioCommand cmd = new()
+                {
+                    UsuariosID = UsuariosID!.Value,
+                    Nombre = _modelo.Nombre,
+                    Rol = _modelo.Rol,
+                    EmpresaID = empresaId,
+                    NuevoPassword = string.IsNullOrWhiteSpace(_modelo.Password) ? null : _modelo.Password
+                };
+                await EditarHandler.HandleAsync(cmd, CancellationToken.None);
+            }
+        }
+        catch (Domain.Exceptions.UsuarioEmailExistenteException ex)
+        {
+            _errores["Email"] = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _errorGeneral = ex.Message;
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private void AbrirModalBaja() => _mostrarModalBaja = true;
+
+    private async Task EjecutarBajaAsync()
+    {
+        await BajaHandler.HandleAsync(UsuariosID!.Value, CancellationToken.None);
+        Nav.NavigateTo("/usuarios");
+    }
+
+    private string Error(string campo) =>
+        _errores.TryGetValue(campo, out string? msg) ? msg : string.Empty;
+
+    private bool TieneError(string campo) => _errores.ContainsKey(campo);
+
+    private sealed class UsuarioFormModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public byte Rol { get; set; } = 1;
+        public string EmpresaIDStr { get; set; } = string.Empty;
+    }
+}

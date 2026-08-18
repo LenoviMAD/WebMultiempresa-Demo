@@ -1,0 +1,231 @@
+<h2>Arquitectura Backend — DDD + Hexagonal</h2>
+<p class="subtitle">Flujo de dependencias y responsabilidades por capa</p>
+
+<style>
+.arch-container { display: flex; gap: 16px; margin-top: 16px; align-items: flex-start; }
+.arch-layers { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.arch-side { width: 220px; display: flex; flex-direction: column; gap: 8px; }
+
+.layer {
+  border-radius: 10px; padding: 14px 16px;
+  border: 1px solid transparent;
+  position: relative;
+}
+.layer-domain      { background: #1a1240; border-color: #4a3a8a; }
+.layer-application { background: #0d2a1a; border-color: #2a6a3a; }
+.layer-infra       { background: #2a1a00; border-color: #6a4a00; }
+.layer-blazor      { background: #001a2a; border-color: #004a6a; }
+
+.layer-title {
+  font-size: 13px; font-weight: 700; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.layer-domain .layer-title      { color: #9d8eff; }
+.layer-application .layer-title { color: #60d080; }
+.layer-infra .layer-title       { color: #e0a030; }
+.layer-blazor .layer-title      { color: #40b0e0; }
+
+.layer-rule {
+  font-size: 10px; color: #666; font-style: italic; margin-bottom: 8px;
+}
+
+.items { display: flex; flex-wrap: wrap; gap: 6px; }
+.item {
+  font-size: 11px; padding: 3px 8px; border-radius: 4px;
+  background: #ffffff10; color: #ccc;
+}
+.item-key { background: #ffffff18; color: #fff; font-weight: 600; }
+
+.arrow-row {
+  text-align: center; font-size: 11px; color: #555;
+  padding: 2px 0;
+}
+
+.side-card {
+  background: #1e1e28; border-radius: 8px; padding: 12px;
+  border: 1px solid #2a2a3a; font-size: 11px;
+}
+.side-card h4 { font-size: 12px; margin: 0 0 8px 0; }
+.side-card ul { margin: 0; padding-left: 16px; color: #aaa; line-height: 1.8; }
+
+.tenant-box {
+  background: #2a1500; border: 1px solid #6a3500; border-radius: 8px;
+  padding: 12px; font-size: 11px;
+}
+.tenant-box h4 { color: #ff8c69; margin: 0 0 6px 0; font-size: 12px; }
+.tenant-box code { background: #3a2000; padding: 2px 5px; border-radius: 3px; color: #ffa060; font-size: 10px; }
+
+.sp-box {
+  background: #001a20; border: 1px solid #004a60; border-radius: 8px;
+  padding: 12px; font-size: 11px;
+}
+.sp-box h4 { color: #40b0e0; margin: 0 0 6px 0; font-size: 12px; }
+.sp-box .sp-name { color: #60c8e8; font-family: monospace; font-size: 10px; display: block; line-height: 1.8; }
+
+.dep-rule {
+  background: #1a1a1a; border: 1px solid #333; border-radius: 6px;
+  padding: 8px 12px; font-size: 11px; color: #888; text-align: center;
+  margin-top: 8px;
+}
+.dep-rule strong { color: #ccc; }
+</style>
+
+<div class="arch-container">
+
+  <div class="arch-layers">
+
+    <!-- DOMAIN -->
+    <div class="layer layer-domain">
+      <div class="layer-title">
+        <span style="font-size:16px">⬡</span> Domain
+        <span style="font-size:10px;font-weight:400;color:#6654cc">— sin dependencias externas</span>
+      </div>
+      <div class="layer-rule">No conoce EF Core, ni HTTP, ni Blazor. Puro C#.</div>
+      <div class="items">
+        <span class="item item-key">Combo (Aggregate Root)</span>
+        <span class="item item-key">ComboItem (Entity)</span>
+        <span class="item item-key">ComboFecha (Entity)</span>
+        <span class="item">Empresa (Entity)</span>
+        <span class="item">Producto (Entity)</span>
+        <span class="item">Vendedor (Entity)</span>
+        <span class="item item-key">IComboRepository</span>
+        <span class="item">IProductoRepository</span>
+        <span class="item">IVendedorRepository</span>
+        <span class="item">IEmpresaRepository</span>
+        <span class="item item-key">ComboItemTipo (enum)</span>
+        <span class="item">RolUsuario (enum)</span>
+        <span class="item">ComboCodigoExistenteException</span>
+        <span class="item">ComboSinListaPrecioException</span>
+      </div>
+    </div>
+
+    <div class="arrow-row">↑ depende de ↑ &nbsp;·&nbsp; Domain no conoce a nadie por debajo</div>
+
+    <!-- APPLICATION -->
+    <div class="layer layer-application">
+      <div class="layer-title">
+        <span style="font-size:16px">⬡</span> Application
+        <span style="font-size:10px;font-weight:400;color:#3a9050">— orquesta casos de uso</span>
+      </div>
+      <div class="layer-rule">Solo conoce Domain. Define Ports (interfaces) y DTOs.</div>
+      <div class="items">
+        <span class="item item-key">CrearComboCommand</span>
+        <span class="item item-key">EditarComboCommand</span>
+        <span class="item item-key">BajaComboCommand</span>
+        <span class="item item-key">ListarCombosQuery</span>
+        <span class="item item-key">ObtenerComboQuery</span>
+        <span class="item">CrearProductoCommand</span>
+        <span class="item">ListarProductosQuery</span>
+        <span class="item">LoginCommand</span>
+        <span class="item item-key">ICurrentEmpresaContext</span>
+        <span class="item item-key">IAuthService (port)</span>
+        <span class="item">ComboDto</span>
+        <span class="item">ComboItemDto</span>
+        <span class="item">ComboListadoDto</span>
+        <span class="item">ProductoDto</span>
+        <span class="item">LoginResultDto</span>
+        <span class="item">UsuarioDto</span>
+      </div>
+    </div>
+
+    <div class="arrow-row">↑ depende de ↑</div>
+
+    <!-- INFRASTRUCTURE -->
+    <div class="layer layer-infra">
+      <div class="layer-title">
+        <span style="font-size:16px">⬡</span> Infrastructure
+        <span style="font-size:10px;font-weight:400;color:#9a6a10">— adapters concretos</span>
+      </div>
+      <div class="layer-rule">Implementa los ports de Domain y Application. Conoce EF Core, SQL Server, JWT.</div>
+      <div class="items">
+        <span class="item item-key">AppDbContext (EF Core)</span>
+        <span class="item item-key">Global Query Filters</span>
+        <span class="item">ComboRepository</span>
+        <span class="item">ProductoRepository</span>
+        <span class="item">VendedorRepository</span>
+        <span class="item">EmpresaRepository</span>
+        <span class="item item-key">JwtAuthService</span>
+        <span class="item item-key">HttpCurrentEmpresaContext</span>
+        <span class="item">EF Core Migrations</span>
+        <span class="item">SP Adapters (via DbContext)</span>
+      </div>
+    </div>
+
+    <div class="arrow-row">↑ depende de ↑</div>
+
+    <!-- BLAZOR -->
+    <div class="layer layer-blazor">
+      <div class="layer-title">
+        <span style="font-size:16px">⬡</span> Blazor (UI)
+        <span style="font-size:10px;font-weight:400;color:#2080b0">— entrada y salida del sistema</span>
+      </div>
+      <div class="layer-rule">Conoce Application (Commands/Queries/DTOs). Nunca toca Domain directamente.</div>
+      <div class="items">
+        <span class="item item-key">ListaCombos.razor</span>
+        <span class="item item-key">FormCombo.razor</span>
+        <span class="item">Login.razor</span>
+        <span class="item">ListaProductos.razor</span>
+        <span class="item">FormProducto.razor</span>
+        <span class="item">GestionEmpresas.razor</span>
+        <span class="item item-key">AuthStateProvider</span>
+        <span class="item">NavMenu.razor</span>
+        <span class="item">Program.cs (DI setup)</span>
+      </div>
+    </div>
+
+    <div class="dep-rule">
+      <strong>Regla de dependencia:</strong> las flechas siempre apuntan hacia adentro.
+      Blazor → Application → Domain &nbsp;|&nbsp; Infrastructure → Domain &amp; Application
+    </div>
+
+  </div>
+
+  <!-- SIDE PANELS -->
+  <div class="arch-side">
+
+    <div class="tenant-box">
+      <h4>🔒 Flujo Tenant (EmpresaID)</h4>
+      <div style="color:#ccc;line-height:2">
+        1. Login → JWT con claim <code>empresa_id</code><br>
+        2. Blazor → <code>ICurrentEmpresaContext</code><br>
+        3. Infrastructure implementa:<br>
+        &nbsp;&nbsp;<code>GetEmpresaId()</code> desde JWT<br>
+        4. <code>AppDbContext</code> aplica:<br>
+        &nbsp;&nbsp;<code>HasQueryFilter(e =></code><br>
+        &nbsp;&nbsp;<code>e.EmpresaID == _ctx.GetEmpresaId())</code><br>
+        5. SuperAdmin: sin filtro (EmpresaID == null)
+      </div>
+    </div>
+
+    <div class="sp-box">
+      <h4>📋 SPs principales</h4>
+      <span class="sp-name">Combos_TXListarActivos</span>
+      <span class="sp-name">Combos_TXObtenerPorId</span>
+      <span class="sp-name">Combos_ACrear</span>
+      <span class="sp-name">Combos_MActualizar</span>
+      <span class="sp-name">Combos_EBajaLogica</span>
+      <span class="sp-name">ComboItems_ACrear</span>
+      <span class="sp-name">ComboItems_ECombosID</span>
+      <span class="sp-name">Productos_TXListarActivos</span>
+      <span class="sp-name">Productos_ACrear</span>
+      <span class="sp-name">Usuarios_TXLogin</span>
+      <span class="sp-name">Empresas_TXListar</span>
+      <span class="sp-name">Empresas_ACrear</span>
+    </div>
+
+    <div class="side-card">
+      <h4 style="color:#9d8eff">Reglas de codificación aplicadas</h4>
+      <ul>
+        <li>Sin <code>var</code> — tipos explícitos</li>
+        <li><code>async/await</code> en todo I/O</li>
+        <li><code>CancellationToken</code> en todos los handlers</li>
+        <li><code>.AsNoTracking()</code> en reads</li>
+        <li>DTOs siempre — nunca entities en UI</li>
+        <li>Constructor injection</li>
+        <li>Nullable reference types ON</li>
+      </ul>
+    </div>
+
+  </div>
+
+</div>

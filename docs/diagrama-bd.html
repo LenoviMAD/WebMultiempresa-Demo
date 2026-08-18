@@ -1,0 +1,559 @@
+<h2>Modelo de Base de Datos — WebMultiempresaDemo</h2>
+<p class="subtitle">Ecosistema WebMultiempresa · Estructura escalable multi-app · Última actualización: 2026-05-20</p>
+
+<style>
+  .er-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  .er-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .group-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+  }
+
+  .group-licensing .group-label { background: #1a1a2e; color: #7b8cde; }
+  .group-actors    .group-label { background: #0d2e2e; color: #7bdede; }
+  .group-catalogs  .group-label { background: #1a2e1a; color: #7bde9a; }
+  .group-entities  .group-label { background: #2e2a1a; color: #debb7b; }
+  .group-ventas    .group-label { background: #2e1a1a; color: #de7b7b; }
+
+  .er-table {
+    background: #1e1e28;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 11px;
+    border: 1px solid #2a2a3a;
+  }
+
+  .er-table-header {
+    padding: 6px 10px;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .group-licensing .er-table-header { background: #2a2a4a; color: #aab4f0; }
+  .group-actors    .er-table-header { background: #0a3030; color: #90e0e0; }
+  .group-catalogs  .er-table-header { background: #1a3a1a; color: #90e0a0; }
+  .group-entities  .er-table-header { background: #3a2e1a; color: #f0cc90; }
+  .group-ventas    .er-table-header { background: #3a1a1a; color: #f09090; }
+
+  .er-table-body { padding: 6px 10px 8px; }
+
+  .er-col {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    border-bottom: 1px solid #252535;
+    color: #ccc;
+  }
+
+  .er-col:last-child { border-bottom: none; }
+  .er-col .col-name  { color: #e0e0e0; }
+  .er-col .col-type  { color: #666; font-size: 10px; }
+
+  .pk     { color: #ffd700 !important; font-weight: 700; }
+  .fk     { color: #87ceeb !important; }
+  .tenant { color: #ff8c69 !important; font-weight: 700; }
+  .appid  { color: #5bd6d6 !important; font-weight: 600; }
+  .mapped { color: #aaa !important; font-style: italic; }
+  .note   { color: #555 !important; font-size: 10px; }
+
+  .badge {
+    display: inline-block;
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .badge-pk      { background: #3a3000; color: #ffd700; }
+  .badge-fk      { background: #002040; color: #87ceeb; }
+  .badge-tenant  { background: #3a1500; color: #ff8c69; }
+  .badge-appid   { background: #003030; color: #5bd6d6; }
+  .badge-exists  { background: #2a2a2a; color: #888; }
+  .badge-new     { background: #0a3010; color: #5de87a; }
+  .badge-replace { background: #3a2800; color: #e8a43a; }
+
+  .legend {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: #aaa;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .legend-sep { color: #333; }
+</style>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#ffd700"></div> PK</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#87ceeb"></div> FK</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ff8c69"></div> TENANT (EmpresaID - Global Query Filter)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#5bd6d6"></div> APP (AplicacionID - discriminador)</div>
+  <span class="legend-sep">|</span>
+  <div class="legend-item"><span class="badge badge-exists">EXISTE</span> tabla actual en EF</div>
+  <div class="legend-item"><span class="badge badge-new">NUEVA</span> a crear con migracion</div>
+  <div class="legend-item"><span class="badge badge-replace">REEMPLAZA</span> sustituye tabla legacy</div>
+</div>
+
+<div class="er-grid">
+
+  <!-- COL 1: LICENCIAMIENTO -->
+  <div class="er-group group-licensing">
+    <div class="group-label">Licenciamiento</div>
+
+    <div class="er-table">
+      <div class="er-table-header">Empresas <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">EmpresaID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(500)</span></div>
+        <div class="er-col"><span class="col-name">KeyConexion</span><span class="col-type">NVARCHAR(50) UNIQUE</span></div>
+        <div class="er-col"><span class="col-name">Baja</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">Aplicaciones <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">AplicacionID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(100)</span></div>
+        <div class="er-col"><span class="col-name">Slug</span><span class="col-type">NVARCHAR(30) UNIQUE</span></div>
+        <div class="er-col"><span class="col-name note">ventas · fleteros · compras</span></div>
+        <div class="er-col"><span class="col-name">Activo</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">EmpresaAplicaciones <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">EmpresaAplicacionID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">AplicacionID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Activo</span><span class="col-type">BIT</span></div>
+        <div class="er-col"><span class="col-name">FechaActivacion</span><span class="col-type">DATETIME2</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">TiposActores <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">TipoActorID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">AplicacionID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(100)</span></div>
+        <div class="er-col"><span class="col-name">Slug</span><span class="col-type">NVARCHAR(30) UNIQUE</span></div>
+        <div class="er-col"><span class="col-name note">vendedor · fletero · proveedor</span></div>
+        <div class="er-col"><span class="col-name">Activo</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">Planes <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">PlanesID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(100)</span></div>
+        <div class="er-col"><span class="col-name">PrecioMensual</span><span class="col-type">DECIMAL(10,2)</span></div>
+        <div class="er-col"><span class="col-name note">capacidades en PlanCapacidades</span></div>
+        <div class="er-col"><span class="col-name">Activo</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">PlanCapacidades <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">PlanCapacidadID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">PlanesID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">TipoActorID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">MaxCapacidad</span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name note">un "Plan Full" tiene 3 filas aqui</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">EmpresaPlanes <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">EmpresaPlanID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">PlanesID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">FechaInicio</span><span class="col-type">DATETIME2</span></div>
+        <div class="er-col"><span class="col-name">FechaFin</span><span class="col-type">DATETIME2 NULL</span></div>
+        <div class="er-col"><span class="col-name">Activo</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COL 2: USUARIOS & ACTORES -->
+  <div class="er-group group-actors">
+    <div class="group-label">Usuarios &amp; Actores</div>
+
+    <div class="er-table">
+      <div class="er-table-header">Usuarios <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">UsuariosID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT NULL</span></div>
+        <div class="er-col"><span class="col-name">Email</span><span class="col-type">NVARCHAR(200) UNIQUE</span></div>
+        <div class="er-col"><span class="col-name">PasswordHash</span><span class="col-type">NVARCHAR(256)</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(200)</span></div>
+        <div class="er-col"><span class="col-name">Rol</span><span class="col-type">TINYINT</span></div>
+        <div class="er-col"><span class="col-name note">0=SuperAdmin · 1=Admin</span></div>
+        <div class="er-col"><span class="col-name">Baja</span><span class="col-type">BIT</span></div>
+        <div class="er-col"><span class="col-name">FechaCreacion</span><span class="col-type">DATETIME2</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">UsuarioAppPermisos <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">UsuarioAppPermisoID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">UsuariosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name appid">AplicacionID <span class="badge badge-appid">APP</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Rol</span><span class="col-type">TINYINT</span></div>
+        <div class="er-col"><span class="col-name note">permiso por app - sin Global Filter</span></div>
+        <div class="er-col"><span class="col-name">Activo</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">Vendedores <span class="badge badge-replace">REEMPLAZA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">VendedoresID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name note">reemplaza VendedoresMultiEmpresa (legacy)</span></div>
+        <div class="er-col"><span class="col-name">VendedorERPID</span><span class="col-type">INT ref. ERP</span></div>
+        <div class="er-col"><span class="col-name">Codigo</span><span class="col-type">VARCHAR(50)</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(200)</span></div>
+        <div class="er-col"><span class="col-name">Email</span><span class="col-type">NVARCHAR(200)</span></div>
+        <div class="er-col"><span class="col-name">PasswordHash</span><span class="col-type">NVARCHAR(256)</span></div>
+        <div class="er-col"><span class="col-name">WhatsApp</span><span class="col-type">VARCHAR(150) NULL</span></div>
+        <div class="er-col"><span class="col-name">Autogestion</span><span class="col-type">BIT</span></div>
+        <div class="er-col"><span class="col-name">Baja</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COL 3: CATALOGOS -->
+  <div class="er-group group-catalogs">
+    <div class="group-label">Catalogos por Empresa</div>
+
+    <div class="er-table">
+      <div class="er-table-header">Rubros <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">RubrosID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(150)</span></div>
+        <div class="er-col"><span class="col-name">Baja</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">Marcas <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">MarcasID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(100)</span></div>
+        <div class="er-col"><span class="col-name">Baja</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ListasPrecios <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ListasPreciosID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(100)</span></div>
+        <div class="er-col"><span class="col-name">Baja</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">Sucursales <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">SucursalesID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(200)</span></div>
+        <div class="er-col"><span class="col-name">Baja</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COL 4: ENTIDADES CORE -->
+  <div class="er-group group-entities">
+    <div class="group-label">Entidades Core - reemplazando legacy</div>
+
+    <div class="er-table">
+      <div class="er-table-header">Productos <span class="badge badge-replace">REEMPLAZA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ProductosID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name note">reemplaza ProductosMultiEmpresa (legacy)</span></div>
+        <div class="er-col"><span class="col-name">ProductoERPID</span><span class="col-type">INT ref. ERP</span></div>
+        <div class="er-col"><span class="col-name">Codigo</span><span class="col-type">VARCHAR(50)</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(200)</span></div>
+        <div class="er-col"><span class="col-name fk">RubrosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT NULL</span></div>
+        <div class="er-col"><span class="col-name fk">MarcasID <span class="badge badge-fk">FK</span></span><span class="col-type">INT NULL</span></div>
+        <div class="er-col"><span class="col-name">UnidadesPorBulto</span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">PorcentajeDeIva</span><span class="col-type">DECIMAL(18,2)</span></div>
+        <div class="er-col"><span class="col-name">DesactivadoParaLaVenta</span><span class="col-type">BIT</span></div>
+        <div class="er-col"><span class="col-name">Baja</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ProductoPrecios <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ProductoPrecioID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">ProductosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">ListasPreciosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name note">elimina L1-L8 hardcoded</span></div>
+        <div class="er-col"><span class="col-name">PrecioFinal</span><span class="col-type">DECIMAL(18,4)</span></div>
+        <div class="er-col"><span class="col-name">PrecioNeto</span><span class="col-type">DECIMAL(18,4)</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">Clientes <span class="badge badge-replace">REEMPLAZA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ClientesID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name note">reemplaza ClientesMultiEmpresa (legacy)</span></div>
+        <div class="er-col"><span class="col-name">ClienteERPID</span><span class="col-type">INT ref. ERP</span></div>
+        <div class="er-col"><span class="col-name">Codigo</span><span class="col-type">NVARCHAR(50)</span></div>
+        <div class="er-col"><span class="col-name">Nombre</span><span class="col-type">NVARCHAR(200)</span></div>
+        <div class="er-col"><span class="col-name">Cuit</span><span class="col-type">NVARCHAR(20) NULL</span></div>
+        <div class="er-col"><span class="col-name">Direccion</span><span class="col-type">NVARCHAR(200) NULL</span></div>
+        <div class="er-col"><span class="col-name">Localidad</span><span class="col-type">NVARCHAR(100) NULL</span></div>
+        <div class="er-col"><span class="col-name">Latitud</span><span class="col-type">DECIMAL(10,6) NULL</span></div>
+        <div class="er-col"><span class="col-name">Longitud</span><span class="col-type">DECIMAL(10,6) NULL</span></div>
+        <div class="er-col"><span class="col-name">Baja</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ClienteVendedores <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ClienteVendedorID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">ClientesID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">VendedoresID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name note">elimina VendedoresId1-4 hardcoded</span></div>
+        <div class="er-col"><span class="col-name">EsPrincipal</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ClienteListasPrecios <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ClienteListaPreciosID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">ClientesID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">ListasPreciosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name note">elimina ListaDePrecio columna unica</span></div>
+        <div class="er-col"><span class="col-name">EsPrincipal</span><span class="col-type">BIT</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COL 5: APP VENTAS + GPS -->
+  <div class="er-group group-ventas">
+    <div class="group-label">App Ventas + GPS</div>
+
+    <div class="er-table">
+      <div class="er-table-header">Combos <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">CombosID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">RubrosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Nombre / NombreAlternativo</span><span class="col-type">NVARCHAR(150)</span></div>
+        <div class="er-col"><span class="col-name">Codigo</span><span class="col-type">NVARCHAR(10) UNIQUE/emp</span></div>
+        <div class="er-col"><span class="col-name">FechaInicio / FechaVigencia</span><span class="col-type">DATETIME2</span></div>
+        <div class="er-col"><span class="col-name">Cantidad / CantidadFacturada</span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">CantidadPorFactura / CantidadDinamica</span><span class="col-type">DECIMAL(18,2)</span></div>
+        <div class="er-col"><span class="col-name">CantidadSinCargo</span><span class="col-type">DECIMAL(7,2) <span class="note">Sin Cargos FIJOS</span></span></div>
+        <div class="er-col"><span class="col-name">CantidadXPDV</span><span class="col-type">DECIMAL(10,2) <span class="note">Can. x PDV</span></span></div>
+        <div class="er-col"><span class="col-name">MontoArrastre</span><span class="col-type">DECIMAL(18,2) <span class="note">Arrastre ($)</span></span></div>
+        <div class="er-col"><span class="col-name">TomaProdParaArrastre</span><span class="col-type">BIT <span class="note">T.L/Prod.P/Arrastre</span></span></div>
+        <div class="er-col"><span class="col-name">ImporteProductosFuera / PorcentajeComision</span><span class="col-type">DECIMAL</span></div>
+        <div class="er-col"><span class="col-name">CupoTotal</span><span class="col-type">INT NULL <span class="note">C/Máxima</span></span></div>
+        <div class="er-col"><span class="col-name note">+ 11 flags bool (EsEstrategico, SoloNoCompradores, ComboDinamico, etc.)</span></div>
+        <div class="er-col"><span class="col-name">Baja</span><span class="col-type">BIT</span></div>
+        <div class="er-col"><span class="col-name">FechaCreacion</span><span class="col-type">DATETIME2</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ComboItems <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ComboItemsID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">CombosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">ProductosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">Cantidad</span><span class="col-type">DECIMAL(18,4)</span></div>
+        <div class="er-col"><span class="col-name">Precio</span><span class="col-type">DECIMAL(18,4)</span></div>
+        <div class="er-col"><span class="col-name">Tipo</span><span class="col-type">TINYINT</span></div>
+        <div class="er-col"><span class="col-name note">1=ConCargo · 2=SinCargo · 3=SinCargoFijo</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ComboFechas <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ComboFechasID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">CombosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">FechaInicial / FechaFinal</span><span class="col-type">DATETIME2</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ComboVendedores <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ComboVendedorID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">CombosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">VendedoresID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ComboListasPrecios <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ComboListaPreciosID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">CombosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">ListasPreciosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ComboSucursales <span class="badge badge-exists">EXISTE</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ComboSucursalID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">CombosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">SucursalesID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ComboRubros <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ComboRubrosID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">CombosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">RubrosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name note">N:M · rubros requeridos para arrastre</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ComboMarcas <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ComboMarcasID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">CombosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">MarcasID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name note">N:M · marcas (familias) requeridas para arrastre</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">ComboLogs <span class="badge badge-new">NUEVA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">ComboLogsID <span class="badge badge-pk">PK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">CombosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">UsuariosID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name">NombreUsuario</span><span class="col-type">NVARCHAR(150)</span></div>
+        <div class="er-col"><span class="col-name">PC</span><span class="col-type">NVARCHAR(50) <span class="note">siempre "Web"</span></span></div>
+        <div class="er-col"><span class="col-name">Comentario</span><span class="col-type">NVARCHAR(500)</span></div>
+        <div class="er-col"><span class="col-name">Fecha</span><span class="col-type">DATETIME2</span></div>
+        <div class="er-col"><span class="col-name note">GQF por EmpresaID · sin columna Baja</span></div>
+      </div>
+    </div>
+
+    <div class="er-table">
+      <div class="er-table-header">GPS_Posiciones <span class="badge badge-replace">REEMPLAZA</span></div>
+      <div class="er-table-body">
+        <div class="er-col"><span class="col-name pk">PosicionID <span class="badge badge-pk">PK</span></span><span class="col-type">BIGINT</span></div>
+        <div class="er-col"><span class="col-name tenant">EmpresaID <span class="badge badge-tenant">TENANT</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name appid">AplicacionID <span class="badge badge-appid">APP</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name fk">VendedoresID <span class="badge badge-fk">FK</span></span><span class="col-type">INT</span></div>
+        <div class="er-col"><span class="col-name note">reemplaza GpsLocations (legacy)</span></div>
+        <div class="er-col"><span class="col-name">FechaHora</span><span class="col-type">DATETIME2(0)</span></div>
+        <div class="er-col"><span class="col-name">Latitud / Longitud</span><span class="col-type">DECIMAL(10,6)</span></div>
+        <div class="er-col"><span class="col-name">VelocidadKmh</span><span class="col-type">DECIMAL(6,2)</span></div>
+        <div class="er-col"><span class="col-name">Precision</span><span class="col-type">DECIMAL(8,2) NULL</span></div>
+        <div class="er-col"><span class="col-name note">sin Baja · sin Global Filter · particionado por mes</span></div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+
+  <div style="padding:12px 16px; background:#1a1a2e; border-radius:8px; border-left:3px solid #7b8cde; font-size:12px; color:#aaa;">
+    <strong style="color:#aab4f0">Licenciamiento multi-app:</strong><br>
+    <code>TiposActores</code> cataloga los actores del ecosistema (Vendedor, Fletero, Proveedor), cada uno ligado a su <code>AplicacionID</code>.<br>
+    <code>PlanCapacidades</code> define cuantos actores de cada tipo permite un plan (N:M - sin columnas hardcodeadas).
+    Un plan "Solo Ventas" tiene 1 fila. Un plan "Full SaaS" tiene 3 filas (Vendedor + Fletero + Proveedor).<br>
+    Nuevos tipos de actor o nuevos planes se agregan con datos, sin cambios de schema.
+  </div>
+
+  <div style="padding:12px 16px; background:#0d2e2e; border-radius:8px; border-left:3px solid #5bd6d6; font-size:12px; color:#aaa;">
+    <strong style="color:#90e0e0">Separacion de actores:</strong><br>
+    <code>Usuarios</code> = administradores web (JWT, rol Admin/SuperAdmin).<br>
+    <code>Vendedores</code> = actores de la app Ventas (credenciales propias, sin acceso web).<br>
+    Cada actor tiene sus propias credenciales. No comparten tabla ni sesion.
+    <code>UsuarioAppPermisos</code> permite a un admin tener rol diferente en cada app.
+  </div>
+
+  <div style="padding:12px 16px; background:#2e2a1a; border-radius:8px; border-left:3px solid #debb7b; font-size:12px; color:#aaa;">
+    <strong style="color:#f0cc90">Anti-patrones eliminados:</strong><br>
+    <code>Productos.PrecioUnitarioFinalL1..L8</code> reemplazado por
+    <code>ProductoPrecios</code> (N:M). Escala a cualquier cantidad de listas sin cambio de schema.<br>
+    <code>Clientes.VendedoresId1..4</code> reemplazado por
+    <code>ClienteVendedores</code> (N:M). Sin limite de vendedores por cliente.<br>
+    <code>Clientes.ListaDePrecio</code> (columna unica) reemplazado por
+    <code>ClienteListasPrecios</code> (N:M con flag EsPrincipal).
+  </div>
+
+  <div style="padding:12px 16px; background:#2e1a1a; border-radius:8px; border-left:3px solid #de7b7b; font-size:12px; color:#aaa;">
+    <strong style="color:#f09090">GPS - diseno para alto volumen:</strong><br>
+    <code>GPS_Posiciones</code> usa <code>BIGINT</code> para el PK (millones de registros/dia).
+    No tiene columna <code>Baja</code> (las posiciones nunca se borran logicamente).
+    No aplica Global Query Filter (tabla particionada por mes - los filtros van en la query).
+    Se discrimina por <code>AplicacionID</code> para soportar Vendedores y Fleteros en la misma tabla.
+  </div>
+
+</div>

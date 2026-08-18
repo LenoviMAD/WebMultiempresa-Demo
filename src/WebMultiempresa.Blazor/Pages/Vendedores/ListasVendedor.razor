@@ -1,0 +1,307 @@
+@page "/vendedores/{VendedorId:int}/listas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using WebMultiempresa.Application.Commands.Vendedores
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Vendedores
+@using WebMultiempresa.Application.Queries.ListasPrecios
+@inject ListarListasVendedorQuery ListasVendedorQuery
+@inject ListarListasPreciosQuery TodasListasQuery
+@inject ObtenerVendedorQuery ObtenerVendedorQuery
+@inject AgregarListaVendedorCommandHandler AgregarHandler
+@inject QuitarListaVendedorCommandHandler QuitarHandler
+@inject MarcarListaDefaultVendedorCommandHandler MarcarDefaultHandler
+@inject NavigationManager Nav
+
+<PageTitle>Listas de precios — @_nombreVendedor</PageTitle>
+
+<div class="page-header">
+    <div class="header-left">
+        <a href="/vendedores" class="btn-back">&#8592;</a>
+        <div>
+            <h2>Listas de precios</h2>
+            @if (!string.IsNullOrEmpty(_nombreVendedor))
+            {
+                <span class="sub">@_nombreVendedor</span>
+            }
+        </div>
+    </div>
+</div>
+
+@if (_cargando)
+{
+    <div class="loading">Cargando...</div>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="alert-error" role="alert">@_error</div>
+    }
+
+    <div class="layout">
+        <div class="panel">
+            <div class="panel-header">Listas asignadas</div>
+
+            @if (!_listas.Any())
+            {
+                <div class="empty-state">No hay listas asignadas.</div>
+            }
+            else
+            {
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Lista</th>
+                            <th>Default</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (VendedorListaPreciosDto item in _listas)
+                        {
+                            <tr>
+                                <td>@item.NombreLista</td>
+                                <td>
+                                    @if (item.EsDefault)
+                                    {
+                                        <span class="badge-default">Default</span>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn-link" @onclick="() => MarcarDefaultAsync(item)" disabled="@_procesando">
+                                            Marcar default
+                                        </button>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!item.EsDefault)
+                                    {
+                                        <button class="btn-link btn-danger" @onclick="() => ConfirmarQuitar(item)" disabled="@_procesando">
+                                            Quitar
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">Agregar lista</div>
+            <div class="add-form">
+                <div class="form-group">
+                    <label>Lista de precios</label>
+                    <select class="form-control" @bind="_agregarListaId">
+                        <option value="0">— Seleccionar —</option>
+                        @foreach (ListaPreciosDto lista in _todasListas)
+                        {
+                            @if (!_listasAsignadasIds.Contains(lista.ListasPreciosID))
+                            {
+                                <option value="@lista.ListasPreciosID">@lista.Nombre</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="chkDefault" @bind="_agregarEsDefault" />
+                    <label for="chkDefault">Marcar como default</label>
+                </div>
+                <button class="btn-primary" @onclick="AgregarAsync" disabled="@(_procesando || _agregarListaId == 0)">
+                    @(_procesando ? "Procesando..." : "Agregar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_listaParaQuitar is not null)
+{
+    <div class="modal-backdrop" @onclick="CancelarModal">
+        <div class="modal-confirm" @onclick:stopPropagation="true">
+            <h3>Quitar lista</h3>
+            <p>¿Quitar la lista <strong>@_listaParaQuitar.NombreLista</strong> del vendedor?</p>
+            <div class="modal-footer">
+                <button class="btn-secondary" @onclick="CancelarModal">Cancelar</button>
+                <button class="btn-danger-solid" @onclick="EjecutarQuitarAsync" disabled="@_procesando">
+                    @(_procesando ? "Procesando..." : "Quitar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+    .header-left { display: flex; align-items: center; gap: 0.75rem; }
+    .header-left h2 { margin: 0; font-size: 1.5rem; font-weight: 700; color: #1e3a5f; }
+    .sub { font-size: 0.875rem; color: #6b7280; }
+    .btn-back { color: #374151; font-size: 1.2rem; text-decoration: none; line-height: 1; }
+    .btn-back:hover { color: #1f2937; }
+
+    .layout { display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap; }
+    .panel { background: rgba(255,255,255,0.98); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); padding: 1.25rem; flex: 1; min-width: 280px; }
+    .panel-header { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7280; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .data-table th { padding: 0.6rem 0.75rem; text-align: left; font-weight: 600; color: #374151; border-bottom: 1px solid #e5e7eb; font-size: 0.82rem; }
+    .data-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #f3f4f6; color: #1f2937; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .badge-default { background: #dcfce7; color: #15803d; font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.55rem; border-radius: 9999px; }
+
+    .add-form { display: flex; flex-direction: column; gap: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+    .form-group label { font-size: 0.875rem; font-weight: 600; color: #374151; }
+    .form-control { padding: 0.55rem 0.875rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; color: #111827; width: 100%; box-sizing: border-box; }
+    .form-control:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+    .form-check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: #374151; }
+
+    .btn-primary { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 0.5rem 1.25rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-secondary { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.875rem; cursor: pointer; }
+    .btn-secondary:hover { background: #e5e7eb; }
+    .btn-link { background: none; border: none; color: #2563eb; font-size: 0.85rem; font-weight: 500; cursor: pointer; padding: 0; text-decoration: none; }
+    .btn-link:hover:not(:disabled) { text-decoration: underline; }
+    .btn-link:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-danger { color: #dc2626; }
+
+    .loading, .empty-state { padding: 1.5rem; text-align: center; color: #6b7280; font-size: 0.9rem; }
+    .alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
+
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-confirm { background: #fff; border-radius: 10px; padding: 1.5rem; width: 380px; max-width: 95vw; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+    .modal-confirm h3 { margin: 0 0 0.75rem; font-size: 1.05rem; color: #1e3a5f; }
+    .modal-confirm p { margin: 0 0 1.25rem; color: #374151; font-size: 0.9rem; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 0.625rem; }
+    .btn-danger-solid { background: #dc2626; color: #fff; border: none; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    .btn-danger-solid:hover:not(:disabled) { background: #b91c1c; }
+    .btn-danger-solid:disabled { opacity: 0.6; cursor: not-allowed; }
+</style>
+
+@code {
+    [Parameter] public int VendedorId { get; set; }
+
+    private List<VendedorListaPreciosDto> _listas = new();
+    private List<ListaPreciosDto> _todasListas = new();
+    private HashSet<int> _listasAsignadasIds = new();
+    private string _nombreVendedor = string.Empty;
+    private bool _cargando = true;
+    private string _error = string.Empty;
+    private bool _procesando;
+
+    private int _agregarListaId;
+    private bool _agregarEsDefault;
+    private VendedorListaPreciosDto? _listaParaQuitar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            VendedorDto? vendedor = await ObtenerVendedorQuery.HandleAsync(VendedorId, CancellationToken.None);
+            if (vendedor is null)
+            {
+                Nav.NavigateTo("/vendedores");
+                return;
+            }
+            _nombreVendedor = vendedor.Nombre;
+
+            await RefrescarListasAsync();
+            IReadOnlyList<ListaPreciosDto> todas = await TodasListasQuery.HandleAsync(CancellationToken.None);
+            _todasListas = todas.ToList();
+        }
+        catch
+        {
+            _error = "Error al cargar los datos. Verifique la conexión.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task RefrescarListasAsync()
+    {
+        IReadOnlyList<VendedorListaPreciosDto> resultado = await ListasVendedorQuery.HandleAsync(VendedorId, CancellationToken.None);
+        _listas = resultado.ToList();
+        _listasAsignadasIds = _listas.Select(l => l.ListasPreciosID).ToHashSet();
+    }
+
+    private async Task AgregarAsync()
+    {
+        if (_agregarListaId == 0) return;
+        _procesando = true;
+        _error = string.Empty;
+        try
+        {
+            AgregarListaVendedorCommand cmd = new()
+            {
+                VendedoresID    = VendedorId,
+                ListasPreciosID = _agregarListaId,
+                EsDefault       = _agregarEsDefault,
+            };
+            await AgregarHandler.HandleAsync(cmd, CancellationToken.None);
+            _agregarListaId  = 0;
+            _agregarEsDefault = false;
+            await RefrescarListasAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _procesando = false;
+        }
+    }
+
+    private void ConfirmarQuitar(VendedorListaPreciosDto item) => _listaParaQuitar = item;
+
+    private void CancelarModal() => _listaParaQuitar = null;
+
+    private async Task EjecutarQuitarAsync()
+    {
+        if (_listaParaQuitar is null) return;
+        _procesando = true;
+        _error = string.Empty;
+        try
+        {
+            await QuitarHandler.HandleAsync(new QuitarListaVendedorCommand { VendedorListasPreciosID = _listaParaQuitar.VendedorListasPreciosID }, CancellationToken.None);
+            _listaParaQuitar = null;
+            await RefrescarListasAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _procesando = false;
+        }
+    }
+
+    private async Task MarcarDefaultAsync(VendedorListaPreciosDto item)
+    {
+        _procesando = true;
+        _error = string.Empty;
+        try
+        {
+            MarcarListaDefaultVendedorCommand cmd = new()
+            {
+                VendedorListasPreciosID = item.VendedorListasPreciosID,
+                VendedoresID            = VendedorId,
+            };
+            await MarcarDefaultHandler.HandleAsync(cmd, CancellationToken.None);
+            await RefrescarListasAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _procesando = false;
+        }
+    }
+}

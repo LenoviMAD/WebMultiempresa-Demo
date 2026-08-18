@@ -1,0 +1,73 @@
+@page "/portal-vendedor/login"
+@layout EmptyLayout
+@using WebMultiempresa.Application.Commands.Auth
+@using WebMultiempresa.Blazor.Auth
+@inject LoginVendedorCommandHandler LoginHandler
+@inject BlazorAuthStateProvider     AuthProvider
+@inject NavigationManager           Nav
+
+<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; background:#f0f2f5;">
+    <div style="background:white; padding:2rem; border-radius:10px; box-shadow:0 2px 12px rgba(0,0,0,0.12); width:320px;">
+        <h4 style="text-align:center; color:#5555FF; margin-bottom:1.5rem;">Portal Vendedores</h4>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-danger py-2">@_error</div>
+        }
+
+        <EditForm Model="_modelo" OnValidSubmit="HandleLogin">
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Código</label>
+                <InputText class="form-control" @bind-Value="_modelo.Codigo" placeholder="Código de vendedor" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Clave</label>
+                <InputText class="form-control" type="password" @bind-Value="_modelo.Clave" />
+            </div>
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Empresa ID</label>
+                <InputNumber class="form-control" @bind-Value="_modelo.EmpresaID" />
+            </div>
+            <button type="submit" class="btn btn-primary w-100" disabled="@_cargando">
+                @(_cargando ? "Ingresando..." : "Ingresar")
+            </button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private LoginVendedorModelo _modelo  = new();
+    private string?             _error;
+    private bool                _cargando;
+
+    private async Task HandleLogin()
+    {
+        _error    = null;
+        _cargando = true;
+
+        try
+        {
+            string token = await LoginHandler.HandleAsync(
+                new LoginVendedorCommand(_modelo.Codigo, _modelo.Clave, _modelo.EmpresaID),
+                CancellationToken.None);
+
+            await AuthProvider.LoginAsync(token);
+            Nav.NavigateTo("/portal-vendedor/dashboard");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _error = "Código o clave incorrectos.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private sealed class LoginVendedorModelo
+    {
+        public string Codigo    { get; set; } = string.Empty;
+        public string Clave     { get; set; } = string.Empty;
+        public int    EmpresaID { get; set; }
+    }
+}

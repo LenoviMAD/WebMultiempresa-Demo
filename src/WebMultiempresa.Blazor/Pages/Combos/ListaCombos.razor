@@ -1,0 +1,265 @@
+@page "/combos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using WebMultiempresa.Application.Commands.Combos
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Combos
+@inject ListarCombosQuery CombosQuery
+@inject AgregarVigenciaCombosCommandHandler VigenciaHandler
+@inject NavigationManager Nav
+
+<PageTitle>Combos</PageTitle>
+
+<div class="pt-page">
+    <div class="pt-page-header">
+        <div class="pt-page-header-left">
+            <div class="pt-page-icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="pt-page-title">Combos</h1>
+                <p class="pt-page-sub">Gestión comercial</p>
+            </div>
+        </div>
+        <div class="pt-page-actions">
+            <button class="pt-btn-secondary" @onclick="AbrirModalVigencias" disabled="@(_combos.Count == 0)">
+                &#128197; Gestionar vigencias
+            </button>
+            <a href="/combos/nuevo" class="pt-btn-primary">+ Nuevo combo</a>
+        </div>
+    </div>
+
+    @if (_cargando)
+    {
+        <div class="pt-loading">Cargando combos...</div>
+    }
+    else if (_combos.Count == 0)
+    {
+        <div class="pt-empty-state">No hay combos activos.</div>
+    }
+    else
+    {
+        <div class="pt-table-wrap">
+            <table class="pt-table">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Marca</th>
+                        <th>Desde</th>
+                        <th>Vigente hasta</th>
+                        <th>Estado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (ComboListadoDto combo in _combos)
+                    {
+                        <tr>
+                            <td class="pt-mono">@combo.Codigo</td>
+                            <td>@combo.Nombre</td>
+                            <td>@combo.NombreMarcaProducto</td>
+                            <td>@combo.FechaInicio.ToString("dd/MM/yyyy")</td>
+                            <td>@combo.FechaVigencia.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                <span class="@(combo.Vigente ? "pt-badge-ok" : "pt-badge-vto")">
+                                    @(combo.Vigente ? "Vigente" : "Vencido")
+                                </span>
+                            </td>
+                            <td>
+                                <a href="/combos/@combo.CombosID" class="pt-link">Ver</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="pt-alert-error" role="alert">@_error</div>
+    }
+
+    @* ── Modal Gestionar Vigencias ── *@
+    @if (_modalVigencias)
+    {
+        <div class="pt-modal-backdrop" @onclick="CerrarModalSiFondo">
+            <div class="pt-modal" @onclick:stopPropagation="true">
+                <div class="pt-modal-header">
+                    <h3 class="pt-modal-title">Gestionar vigencias</h3>
+                    <button class="pt-modal-close" @onclick="CerrarModal">&#x2715;</button>
+                </div>
+
+                <div class="pt-modal-body">
+                    <div class="pt-periodo-form">
+                        <div class="pt-periodo-field">
+                            <label class="pt-label-dark">Desde</label>
+                            <input type="date" class="pt-input" @bind="_vigDesde" />
+                        </div>
+                        <div class="pt-periodo-field">
+                            <label class="pt-label-dark">Hasta</label>
+                            <input type="date" class="pt-input" @bind="_vigHasta" />
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_errorModal))
+                    {
+                        <div class="pt-alert-error-sm">@_errorModal</div>
+                    }
+
+                    <div>
+                        <div class="pt-section-header-row">
+                            <span class="pt-label-dark">Combos a asignar</span>
+                            <div class="pt-actions-inline">
+                                <button class="pt-btn-text" @onclick="SeleccionarTodos">Todos</button>
+                                <button class="pt-btn-text" @onclick="DeselectTodos">Ninguno</button>
+                            </div>
+                        </div>
+                        <div class="pt-checklist">
+                            @foreach (ComboListadoDto combo in _combos)
+                            {
+                                bool sel = _combosSeleccionados.Contains(combo.CombosID);
+                                <label class="pt-check-item @(sel ? "pt-check-item-sel" : "")">
+                                    <input type="checkbox" checked="@sel"
+                                           @onchange="e => ToggleCombo(combo.CombosID, (bool)e.Value!)" />
+                                    <span class="pt-mono-sm">[@combo.Codigo]</span>
+                                    <span>@combo.Nombre</span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+
+                    @if (_periodosGuardados.Count > 0)
+                    {
+                        <div class="pt-periodos-guardados">
+                            <span class="pt-periodos-label">Períodos guardados en esta sesión:</span>
+                            @foreach (string p in _periodosGuardados)
+                            {
+                                <span class="pt-periodo-tag">&#10003; @p</span>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="pt-modal-footer">
+                    <button class="pt-modal-btn-cancel" @onclick="CerrarModal">Cerrar</button>
+                    <button class="pt-modal-btn-primary" @onclick="GuardarPeriodoAsync" disabled="@_guardandoVig">
+                        @(_guardandoVig ? "Guardando..." : "Guardar período")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ComboListadoDto> _combos = new();
+    private bool _cargando = true;
+    private string _error = string.Empty;
+
+    // Estado modal vigencias
+    private bool _modalVigencias;
+    private DateTime _vigDesde = DateTime.Today;
+    private DateTime _vigHasta = DateTime.Today.AddDays(7);
+    private HashSet<int> _combosSeleccionados = new();
+    private List<string> _periodosGuardados = new();
+    private bool _guardandoVig;
+    private string _errorModal = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            IReadOnlyList<ComboListadoDto> resultado = await CombosQuery.HandleAsync(CancellationToken.None);
+            _combos = resultado.ToList();
+        }
+        catch
+        {
+            _error = "Error al cargar los combos. Verifique la conexión.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private void AbrirModalVigencias()
+    {
+        _combosSeleccionados = new HashSet<int>(_combos.Select(c => c.CombosID));
+        _vigDesde = DateTime.Today;
+        _vigHasta = DateTime.Today.AddDays(7);
+        _periodosGuardados = new();
+        _errorModal = string.Empty;
+        _modalVigencias = true;
+    }
+
+    private void CerrarModal()
+    {
+        _modalVigencias = false;
+        _periodosGuardados = new();
+    }
+
+    private void CerrarModalSiFondo() => CerrarModal();
+
+    private void ToggleCombo(int id, bool agregar)
+    {
+        if (agregar) _combosSeleccionados.Add(id);
+        else _combosSeleccionados.Remove(id);
+    }
+
+    private void SeleccionarTodos() =>
+        _combosSeleccionados = new HashSet<int>(_combos.Select(c => c.CombosID));
+
+    private void DeselectTodos() =>
+        _combosSeleccionados = new HashSet<int>();
+
+    private async Task GuardarPeriodoAsync()
+    {
+        _errorModal = string.Empty;
+
+        if (_combosSeleccionados.Count == 0)
+        {
+            _errorModal = "Seleccioná al menos un combo.";
+            return;
+        }
+
+        if (_vigHasta < _vigDesde)
+        {
+            _errorModal = "La fecha de fin debe ser posterior a la fecha de inicio.";
+            return;
+        }
+
+        _guardandoVig = true;
+        try
+        {
+            AgregarVigenciaCombosCommand cmd = new()
+            {
+                FechaInicio = _vigDesde,
+                FechaFin = _vigHasta,
+                CombosIDs = _combosSeleccionados.ToList()
+            };
+
+            await VigenciaHandler.HandleAsync(cmd, CancellationToken.None);
+
+            _periodosGuardados.Add(
+                $"{_vigDesde:dd/MM/yyyy} → {_vigHasta:dd/MM/yyyy} ({_combosSeleccionados.Count} combos)");
+
+            // Limpiar fechas para permitir agregar otro período
+            _vigDesde = DateTime.Today;
+            _vigHasta = DateTime.Today.AddDays(7);
+            _combosSeleccionados = new HashSet<int>(_combos.Select(c => c.CombosID));
+        }
+        catch (Exception ex)
+        {
+            _errorModal = ex.Message;
+        }
+        finally
+        {
+            _guardandoVig = false;
+        }
+    }
+}

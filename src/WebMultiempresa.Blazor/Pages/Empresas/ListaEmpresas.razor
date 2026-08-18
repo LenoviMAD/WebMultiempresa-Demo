@@ -1,0 +1,92 @@
+@page "/empresas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "SuperAdmin")]
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Empresas
+@inject ListarEmpresasQuery EmpresasQuery
+@inject NavigationManager Nav
+
+<PageTitle>Empresas</PageTitle>
+
+<div class="page-header">
+    <h2>Empresas</h2>
+    <a href="/empresas/nueva" class="btn-primary">+ Nueva empresa</a>
+</div>
+
+@if (_cargando)
+{
+    <div class="loading">Cargando empresas...</div>
+}
+else if (_empresas.Count == 0)
+{
+    <div class="empty-state">No hay empresas activas.</div>
+}
+else
+{
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Key Conexión</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (EmpresaDto e in _empresas)
+                {
+                    <tr>
+                        <td>@e.Nombre</td>
+                        <td class="mono">@e.KeyConexion</td>
+                        <td><a href="/empresas/@e.EmpresaID" class="btn-link">Editar</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert-error">@_error</div>
+}
+
+<style>
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+    .page-header h2 { margin: 0; font-size: 1.5rem; font-weight: 700; color: #1e3a5f; }
+    .btn-primary { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 0.5rem 1.125rem; font-size: 0.875rem; font-weight: 600; text-decoration: none; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .table-container { background: rgba(255,255,255,0.98); border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); overflow: auto; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .data-table th { background: #f8fafc; padding: 0.75rem 1rem; text-align: left; font-weight: 600; color: #374151; border-bottom: 1px solid #e5e7eb; }
+    .data-table td { padding: 0.75rem 1rem; border-bottom: 1px solid #f3f4f6; color: #1f2937; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: #f9fafb; }
+    .mono { font-family: monospace; font-size: 0.85rem; color: #374151; }
+    .btn-link { color: #2563eb; text-decoration: none; font-size: 0.85rem; font-weight: 500; }
+    .btn-link:hover { text-decoration: underline; }
+    .loading, .empty-state { padding: 2rem; text-align: center; color: #6b7280; }
+    .alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 0.75rem 1rem; border-radius: 6px; margin-top: 1rem; }
+</style>
+
+@code {
+    private List<EmpresaDto> _empresas = new();
+    private bool _cargando = true;
+    private string _error = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            IReadOnlyList<EmpresaDto> resultado = await EmpresasQuery.HandleAsync(CancellationToken.None);
+            _empresas = resultado.ToList();
+        }
+        catch
+        {
+            _error = "Error al cargar las empresas.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+}

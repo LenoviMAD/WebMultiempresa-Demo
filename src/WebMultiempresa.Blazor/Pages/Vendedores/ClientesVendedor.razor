@@ -1,0 +1,327 @@
+@page "/vendedores/{VendedorId:int}/clientes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using WebMultiempresa.Application.Commands.Vendedores
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Clientes
+@using WebMultiempresa.Application.Queries.Vendedores
+@inject ListarClientesVendedorQuery ClientesVendedorQuery
+@inject ListarClientesQuery ClientesQuery
+@inject ObtenerVendedorQuery VendedorQuery
+@inject AsignarClientesVendedorCommandHandler AsignarHandler
+@inject QuitarClienteVendedorCommandHandler QuitarHandler
+@inject NavigationManager Nav
+
+<PageTitle>Clientes del vendedor</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h2>Clientes asignados</h2>
+        @if (_vendedor is not null)
+        {
+            <span class="subtitle">@_vendedor.Codigo — @_vendedor.Nombre</span>
+        }
+    </div>
+    <a href="/vendedores" class="btn-secondary">&#8592; Volver</a>
+</div>
+
+@if (_cargando)
+{
+    <div class="loading">Cargando...</div>
+}
+else
+{
+    <div class="layout-dos-columnas">
+
+        <!-- Columna izquierda: clientes ya asignados -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-titulo">Asignados (@_asignados.Count)</span>
+            </div>
+            @if (_asignados.Count == 0)
+            {
+                <div class="empty-state-small">Sin clientes asignados.</div>
+            }
+            else
+            {
+                <div class="lista-asignados">
+                    @foreach (ClienteAsignadoDto c in _asignados.OrderBy(x => x.Nombre))
+                    {
+                        <div class="item-asignado">
+                            <span class="item-codigo">@c.Codigo</span>
+                            <span class="item-nombre">@c.Nombre</span>
+                            <button class="btn-quitar" title="Quitar" @onclick="() => ConfirmarQuitar(c)">✕</button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Columna derecha: buscador + selector -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-titulo">Agregar clientes</span>
+            </div>
+
+            <div class="buscador-row">
+                <input type="text" class="input-search" placeholder="Buscar por nombre o código..."
+                       @bind="_busqueda" @bind:event="oninput" />
+                <button class="btn-secondary btn-sm" @onclick="SeleccionarTodos">Seleccionar todo</button>
+                <button class="btn-secondary btn-sm" @onclick="LimpiarSeleccion">Limpiar</button>
+            </div>
+
+            <div class="lista-seleccion">
+                @foreach (ClienteListadoDto c in ClientesFiltradosNoAsignados)
+                {
+                    bool seleccionado = _seleccionados.Contains(c.ClientesID);
+                    <label class="item-check @(seleccionado ? "item-check--activo" : "")">
+                        <input type="checkbox"
+                               checked="@seleccionado"
+                               @onchange="() => ToggleSeleccion(c.ClientesID)" />
+                        <span class="item-codigo">@c.Codigo</span>
+                        <span class="item-nombre">@c.Nombre</span>
+                    </label>
+                }
+                @if (!ClientesFiltradosNoAsignados.Any())
+                {
+                    <div class="empty-state-small">
+                        @if (string.IsNullOrWhiteSpace(_busqueda))
+                        { <span>Todos los clientes ya están asignados.</span> }
+                        else
+                        { <span>Sin resultados para "@_busqueda".</span> }
+                    </div>
+                }
+            </div>
+
+            <div class="panel-footer">
+                <span class="seleccion-count">@_seleccionados.Count seleccionado(s)</span>
+                <button class="btn-primary"
+                        disabled="@(_seleccionados.Count == 0 || _procesando)"
+                        @onclick="AgregarSeleccionadosAsync">
+                    @(_procesando ? "Agregando..." : "Agregar seleccionados")
+                </button>
+            </div>
+        </div>
+
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert-error" role="alert">@_error</div>
+}
+
+@if (_clienteParaQuitar is not null)
+{
+    <div class="modal-backdrop" @onclick="CancelarModal">
+        <div class="modal-confirm" @onclick:stopPropagation="true">
+            <h3>Quitar cliente</h3>
+            <p>¿Quitar a <strong>@_clienteParaQuitar.Nombre</strong> del vendedor?</p>
+            <div class="modal-footer">
+                <button class="btn-secondary" @onclick="CancelarModal">Cancelar</button>
+                <button class="btn-danger-solid" @onclick="EjecutarQuitarAsync" disabled="@_procesando">
+                    @(_procesando ? "Procesando..." : "Quitar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem; }
+    .page-header h2 { margin: 0 0 0.2rem; font-size: 1.5rem; font-weight: 700; color: #1e3a5f; }
+    .subtitle { font-size: 0.9rem; color: #6b7280; }
+
+    .btn-primary {
+        background: #2563eb; color: #fff; border: none; border-radius: 6px;
+        padding: 0.5rem 1.125rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .btn-secondary {
+        background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;
+        border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.875rem; cursor: pointer; text-decoration: none;
+    }
+    .btn-secondary:hover { background: #e5e7eb; }
+    .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+
+    .layout-dos-columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; align-items: start; }
+    @@media (max-width: 768px) { .layout-dos-columnas { grid-template-columns: 1fr; } }
+
+    .panel { background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); overflow: hidden; }
+    .panel-header { padding: 0.875rem 1rem; border-bottom: 1px solid #e5e7eb; background: #f8fafc; }
+    .panel-titulo { font-weight: 700; font-size: 0.9rem; color: #374151; }
+    .panel-footer { display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 1rem; border-top: 1px solid #e5e7eb; background: #f8fafc; }
+    .seleccion-count { font-size: 0.85rem; color: #6b7280; }
+
+    .buscador-row { display: flex; gap: 0.5rem; padding: 0.75rem 1rem; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #f3f4f6; }
+    .input-search { flex: 1; min-width: 160px; padding: 0.4rem 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem; }
+    .input-search:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+
+    .lista-asignados, .lista-seleccion { max-height: 420px; overflow-y: auto; padding: 0.25rem 0; }
+
+    .item-asignado {
+        display: flex; align-items: center; gap: 0.5rem;
+        padding: 0.5rem 1rem; border-bottom: 1px solid #f3f4f6;
+        font-size: 0.875rem;
+    }
+    .item-asignado:last-child { border-bottom: none; }
+    .item-asignado:hover { background: #f9fafb; }
+
+    .item-check {
+        display: flex; align-items: center; gap: 0.5rem;
+        padding: 0.45rem 1rem; cursor: pointer; font-size: 0.875rem;
+        border-bottom: 1px solid #f3f4f6; user-select: none;
+    }
+    .item-check:last-child { border-bottom: none; }
+    .item-check:hover { background: #f9fafb; }
+    .item-check--activo { background: #eff6ff; }
+    .item-check input[type="checkbox"] { cursor: pointer; accent-color: #2563eb; width: 15px; height: 15px; flex-shrink: 0; }
+
+    .item-codigo { font-family: monospace; font-size: 0.82rem; color: #074DA2; min-width: 60px; flex-shrink: 0; }
+    .item-nombre { flex: 1; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .btn-quitar { background: none; border: none; color: #9ca3af; font-size: 0.85rem; cursor: pointer; padding: 0.2rem 0.35rem; border-radius: 4px; flex-shrink: 0; }
+    .btn-quitar:hover { color: #dc2626; background: #fef2f2; }
+
+    .loading, .empty-state-small { padding: 1.5rem 1rem; text-align: center; color: #9ca3af; font-size: 0.875rem; }
+    .alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 0.75rem 1rem; border-radius: 6px; margin-top: 1rem; }
+
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-confirm { background: #fff; border-radius: 10px; padding: 1.5rem; width: 360px; max-width: 95vw; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+    .modal-confirm h3 { margin: 0 0 0.75rem; font-size: 1.05rem; color: #1e3a5f; }
+    .modal-confirm p { margin: 0 0 1.25rem; color: #374151; font-size: 0.9rem; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 0.625rem; }
+    .btn-danger-solid { background: #dc2626; color: #fff; border: none; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    .btn-danger-solid:hover:not(:disabled) { background: #b91c1c; }
+    .btn-danger-solid:disabled { opacity: 0.6; cursor: not-allowed; }
+</style>
+
+@code {
+    [Parameter] public int VendedorId { get; set; }
+
+    private VendedorDto? _vendedor;
+    private List<ClienteAsignadoDto> _asignados = [];
+    private List<ClienteListadoDto> _todosClientes = [];
+    private HashSet<int> _seleccionados = [];
+    private ClienteAsignadoDto? _clienteParaQuitar;
+
+    private bool _cargando = true;
+    private bool _procesando;
+    private string _busqueda = string.Empty;
+    private string _error = string.Empty;
+
+    private HashSet<int> _idsAsignados => _asignados.Select(a => a.ClientesID).ToHashSet();
+
+    private IEnumerable<ClienteListadoDto> ClientesFiltradosNoAsignados
+    {
+        get
+        {
+            HashSet<int> asignados = _idsAsignados;
+            IEnumerable<ClienteListadoDto> disponibles = _todosClientes.Where(c => !asignados.Contains(c.ClientesID));
+            if (!string.IsNullOrWhiteSpace(_busqueda))
+                disponibles = disponibles.Where(c =>
+                    c.Nombre.Contains(_busqueda, StringComparison.OrdinalIgnoreCase) ||
+                    c.Codigo.Contains(_busqueda, StringComparison.OrdinalIgnoreCase));
+            return disponibles;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _error = string.Empty;
+        try
+        {
+            _vendedor      = await VendedorQuery.HandleAsync(VendedorId, CancellationToken.None);
+            _asignados     = (await ClientesVendedorQuery.HandleAsync(VendedorId, CancellationToken.None)).ToList();
+            _todosClientes = (await ClientesQuery.HandleAsync(CancellationToken.None)).ToList();
+
+            if (_vendedor is null)
+                Nav.NavigateTo("/vendedores");
+        }
+        catch
+        {
+            _error = "Error al cargar los datos. Verifique la conexión.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private void ToggleSeleccion(int clientesId)
+    {
+        if (!_seleccionados.Remove(clientesId))
+            _seleccionados.Add(clientesId);
+    }
+
+    private void SeleccionarTodos()
+    {
+        foreach (ClienteListadoDto c in ClientesFiltradosNoAsignados)
+            _seleccionados.Add(c.ClientesID);
+    }
+
+    private void LimpiarSeleccion() => _seleccionados.Clear();
+
+    private async Task AgregarSeleccionadosAsync()
+    {
+        if (_seleccionados.Count == 0) return;
+        _procesando = true;
+        _error = string.Empty;
+        try
+        {
+            await AsignarHandler.HandleAsync(new AsignarClientesVendedorCommand
+            {
+                VendedoresID = VendedorId,
+                ClientesIDs  = _seleccionados.ToList()
+            }, CancellationToken.None);
+
+            _seleccionados.Clear();
+            _busqueda = string.Empty;
+            await CargarAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _procesando = false;
+        }
+    }
+
+    private void ConfirmarQuitar(ClienteAsignadoDto cliente) => _clienteParaQuitar = cliente;
+    private void CancelarModal() => _clienteParaQuitar = null;
+
+    private async Task EjecutarQuitarAsync()
+    {
+        if (_clienteParaQuitar is null) return;
+        _procesando = true;
+        _error = string.Empty;
+        try
+        {
+            await QuitarHandler.HandleAsync(new QuitarClienteVendedorCommand
+            {
+                ClientesID   = _clienteParaQuitar.ClientesID,
+                VendedoresID = VendedorId
+            }, CancellationToken.None);
+
+            _asignados.RemoveAll(a => a.ClientesID == _clienteParaQuitar.ClientesID);
+            _clienteParaQuitar = null;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _procesando = false;
+        }
+    }
+}

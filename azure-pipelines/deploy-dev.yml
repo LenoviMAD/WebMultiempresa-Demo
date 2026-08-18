@@ -1,0 +1,61 @@
+name: deploy-dev-$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - development
+
+pool:
+  name: Default
+
+variables:
+  artifactName: drop
+  ciDefinitionName: ci-validation
+
+stages:
+- stage: DeployDEV
+  displayName: Bootstrap DEV deployment
+  jobs:
+  - job: BootstrapDeploy
+    displayName: Prepare DEV deployment
+    steps:
+    - checkout: self
+      clean: true
+
+    - task: DownloadPipelineArtifact@2
+      displayName: Download latest CI artifact from development
+      inputs:
+        buildType: specific
+        project: '$(System.TeamProjectId)'
+        definition: '$(ciDefinitionName)'
+        buildVersionToDownload: latestFromBranch
+        branchName: 'refs/heads/development'
+        artifactName: '$(artifactName)'
+        targetPath: '$(Pipeline.Workspace)/$(artifactName)'
+
+    - task: PowerShell@2
+      displayName: Bootstrap DEV deploy flow
+      inputs:
+        pwsh: true
+        targetType: inline
+        script: |
+          $metadataPath = Join-Path "$(Pipeline.Workspace)" "$(artifactName)/bootstrap/pipeline-metadata.json"
+          if (Test-Path $metadataPath) {
+            Write-Host "CI artifact metadata detected at $metadataPath"
+            Get-Content $metadataPath
+          } else {
+            Write-Host "No bootstrap metadata found. Continuing with repository bootstrap flow."
+          }
+
+          $deployScript = Join-Path "$(Build.SourcesDirectory)" "scripts/deploy/deploy-dev.ps1"
+          if (-not (Test-Path $deployScript)) {
+            Write-Host "No scripts/deploy/deploy-dev.ps1 found."
+            Write-Host "Deploy pipeline scaffold created successfully; add the real DEV deploy script when the application deploy flow exists."
+            exit 0
+          }
+
+          Write-Host "Executing custom DEV deploy script."
+          & $deployScript
+          if ($LASTEXITCODE -ne 0) {
+            throw "Custom DEV deploy script failed with exit code $LASTEXITCODE."
+          }

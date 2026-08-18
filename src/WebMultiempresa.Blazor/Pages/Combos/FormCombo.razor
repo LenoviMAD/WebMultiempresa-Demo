@@ -1,0 +1,1537 @@
+@page "/combos/nuevo"
+@page "/combos/{CombosID:int}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using WebMultiempresa.Application.Commands.Combos
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Combos
+@using WebMultiempresa.Application.Queries.FamiliaProductos
+@using WebMultiempresa.Application.Queries.MarcasProductos
+@using WebMultiempresa.Application.Queries.Productos
+@using WebMultiempresa.Application.Queries.Vendedores
+@using WebMultiempresa.Application.Queries.ListasPrecios
+@inject CrearComboCommandHandler CrearHandler
+@inject EditarComboCommandHandler EditarHandler
+@inject BajaComboCommandHandler BajaHandler
+@inject ObtenerComboQuery ObtenerQuery
+@inject ListarMarcasProductosQuery MarcasProductosQuery
+@inject ListarFamiliaProductosQuery FamiliaProductosQuery
+@inject ObtenerProductosParaComboQuery ProductosQuery
+@inject ListarVendedoresQuery VendedoresQuery
+@inject ListarListasPreciosQuery ListasPreciosQuery
+@inject NavigationManager Nav
+
+<PageTitle>@(_esNuevo ? "Nuevo combo" : $"Editar — {_modelo.Nombre}")</PageTitle>
+
+<div class="pt-page">
+
+    @* ── Header de página ── *@
+    <div class="pt-page-header">
+        <div class="pt-page-header-left">
+            <div class="pt-page-icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="pt-page-title">
+                    @if (_esNuevo)
+                    {
+                        <span>Nuevo combo</span>
+                    }
+                    else
+                    {
+                        <span>@(string.IsNullOrEmpty(_modelo.Nombre) ? "Editar combo" : _modelo.Nombre)</span>
+                    }
+                </h1>
+                <p class="pt-page-sub">
+                    @if (!_esNuevo && !string.IsNullOrEmpty(_modelo.Codigo))
+                    {
+                        <span>Código: @_modelo.Codigo</span>
+                    }
+                    else
+                    {
+                        <span>Complete los datos del combo paso a paso</span>
+                    }
+                </p>
+            </div>
+        </div>
+    </div>
+
+    @if (_cargando)
+    {
+        <div class="pt-loading">Cargando...</div>
+    }
+    else
+    {
+        @* ── Tabs ── *@
+        <div class="pt-tabs">
+            <button class="pt-tab @(_tab == 0 ? "pt-tab-active" : "")" @onclick="() => _tab = 0">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Configuración
+            </button>
+            <button class="pt-tab @(_tab == 1 ? "pt-tab-active" : "")" @onclick="() => _tab = 1">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Arrastre
+            </button>
+            @if (!_esNuevo)
+            {
+                <button class="pt-tab @(_tab == 2 ? "pt-tab-active" : "")" @onclick="() => _tab = 2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    Historial
+                </button>
+            }
+        </div>
+
+        <div class="pt-body">
+
+            @* ══════════════ TAB 0: CONFIGURACIÓN ══════════════ *@
+            @if (_tab == 0)
+            {
+                @* ─── PASO 1: Identificación ─── *@
+                <div class="pt-card">
+                    <div class="pt-card-header">
+                        <span class="pt-card-title">
+                            <span class="pt-step-badge">1</span>
+                            ¿Qué es este combo?
+                        </span>
+                        @if (!string.IsNullOrEmpty(_modelo.Codigo))
+                        {
+                            <span class="pt-badge-count">Código: @_modelo.Codigo</span>
+                        }
+                    </div>
+                    <span class="pt-section-intro">Datos básicos que identifican el combo en el sistema y en los pedidos</span>
+
+                    <div class="pt-field-row">
+                        <div class="pt-field" style="flex: 0 0 130px;">
+                            <label>Código <span class="pt-req">*</span></label>
+                            <input class="pt-input @(TieneError("Codigo") ? "pt-err" : "")"
+                                   @bind="_modelo.Codigo" maxlength="10" placeholder="Ej.: CMP-001"
+                                   style="font-family:monospace; font-size:1rem; font-weight:600; letter-spacing:.05em;" />
+                            <ErrorMsg Mensaje="@Error("Codigo")" />
+                        </div>
+                        <div class="pt-field pt-flex1">
+                            <label>Nombre del combo <span class="pt-req">*</span></label>
+                            <input class="pt-input @(TieneError("Nombre") ? "pt-err" : "")"
+                                   @bind="_modelo.Nombre" maxlength="150"
+                                   placeholder="Nombre visible en listas y pedidos" />
+                            <ErrorMsg Mensaje="@Error("Nombre")" />
+                        </div>
+                    </div>
+
+                    <div class="pt-field-row">
+                        <div class="pt-field" style="flex: 0 0 220px;">
+                            <label>Categoría <span class="pt-req">*</span></label>
+                            <select class="pt-input pt-select @(TieneError("MarcasProductosID") ? "pt-err" : "")"
+                                    @bind="_modelo.MarcasProductosID">
+                                <option value="0">Seleccionar categoría…</option>
+                                @foreach (MarcaProductoDto r in _marcasProductos)
+                                {
+                                    <option value="@r.MarcasProductosID">@r.Nombre</option>
+                                }
+                            </select>
+                            <ErrorMsg Mensaje="@Error("MarcasProductosID")" />
+                        </div>
+                        <div class="pt-field" style="flex-shrink:0;">
+                            <label>Tipo de clientes <span class="pt-req">*</span></label>
+                            <div class="pt-tipo-clientes">
+                                <label class="pt-tipo-btn @(_modelo.ClientesNumericos ? "pt-tipo-active" : "")"
+                                       @onclick="() => _modelo.ClientesNumericos = !_modelo.ClientesNumericos">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                                    Salón
+                                </label>
+                                <label class="pt-tipo-btn @(_modelo.ClientesAlfaNumericos ? "pt-tipo-active" : "")"
+                                       @onclick="() => _modelo.ClientesAlfaNumericos = !_modelo.ClientesAlfaNumericos">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><path d="m16 8 5-5v13l-5-5"/></svg>
+                                    Distribución
+                                </label>
+                            </div>
+                            <ErrorMsg Mensaje="@Error("TipoCliente")" />
+                        </div>
+                    </div>
+
+                    @* Nombre alternativo colapsable *@
+                    <button type="button" class="pt-collapse-link" @onclick="() => _mostrarNombreAlt = !_mostrarNombreAlt">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            @if (_mostrarNombreAlt)
+                            {
+                                <polyline points="18 15 12 9 6 15"/>
+                            }
+                            else
+                            {
+                                <polyline points="6 9 12 15 18 9"/>
+                            }
+                        </svg>
+                        @(_mostrarNombreAlt ? "Ocultar nombre alternativo" : "Agregar nombre alternativo")
+                    </button>
+                    @if (_mostrarNombreAlt)
+                    {
+                        <div class="pt-field" style="padding-bottom:.25rem;">
+                            <label>Nombre alternativo</label>
+                            <input class="pt-input" @bind="_modelo.NombreAlternativo" maxlength="150"
+                                   placeholder="Nombre para uso interno o impresión alternativa" />
+                        </div>
+                    }
+                </div>
+
+                @* ─── PASOS 2 + 3: Vigencia + ¿A quiénes aplica? ─── *@
+                <div class="pt-two-col-65">
+
+                    @* PASO 2: Vigencia *@
+                    <div class="pt-card">
+                        <div class="pt-card-header pt-card-header-vigencia">
+                            <span class="pt-card-title">
+                                <span class="pt-step-badge">2</span>
+                                ¿Cuándo aplica el combo?
+                            </span>
+                            @if (_modelo.FechaVigencia >= _modelo.FechaInicio)
+                            {
+                                <span class="pt-badge-count">@VigenciaDias días activo</span>
+                            }
+                        </div>
+                        <span class="pt-section-intro">Período de validez del combo para que aparezca en pedidos</span>
+
+                        <div class="pt-vigencia-dates">
+                            <div class="pt-field pt-flex1">
+                                <label>Fecha de inicio <span class="pt-req">*</span></label>
+                                <input type="date" class="pt-input" @bind="_modelo.FechaInicio" />
+                            </div>
+                            <span class="pt-vigencia-arrow">→</span>
+                            <div class="pt-field pt-flex1">
+                                <label>Fecha de fin <span class="pt-req">*</span></label>
+                                <input type="date" class="pt-input @(TieneError("FechaVigencia") ? "pt-err" : "")"
+                                       @bind="_modelo.FechaVigencia" />
+                                <ErrorMsg Mensaje="@Error("FechaVigencia")" />
+                            </div>
+                        </div>
+
+                        @if (_modelo.FechaVigencia >= _modelo.FechaInicio)
+                        {
+                            <div class="pt-info-bar">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                Del <strong>@_modelo.FechaInicio.ToString("dd/MM/yyyy")</strong> al <strong>@_modelo.FechaVigencia.ToString("dd/MM/yyyy")</strong> — @VigenciaDias días de vigencia
+                            </div>
+                        }
+
+                        <div class="pt-field">
+                            <label>Nota u observación</label>
+                            <textarea class="pt-input pt-textarea" @bind="_modelo.Nota" maxlength="500"
+                                      placeholder="Información adicional para el equipo de ventas (opcional)…" rows="3"></textarea>
+                            <span class="pt-char-count">@NotaChars / 500</span>
+                        </div>
+
+                        @if (_modelo.Fechas.Count > 0)
+                        {
+                            <div>
+                                <p class="pt-label-sm">Períodos adicionales configurados</p>
+                                <table class="pt-table pt-table-xs">
+                                    <thead><tr><th>Desde</th><th>Hasta</th></tr></thead>
+                                    <tbody>
+                                        @foreach (ComboFechaFormModel f in _modelo.Fechas)
+                                        {
+                                            <tr>
+                                                <td>@f.FechaInicio.ToString("dd/MM/yy")</td>
+                                                <td>@f.FechaFin.ToString("dd/MM/yy")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+
+                    @* PASO 3: Segmentación *@
+                    <div class="pt-card">
+                        <div class="pt-card-header pt-card-header-seg">
+                            <span class="pt-card-title">
+                                <span class="pt-step-badge">3</span>
+                                ¿A quiénes aplica?
+                            </span>
+                        </div>
+                        <span class="pt-section-intro">Vendedores y listas de precios que pueden usar este combo</span>
+
+                        @* Vendedores *@
+                        <div class="pt-seg-subsection">
+                            <p class="pt-subsection-label">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                                Vendedores
+                            </p>
+                            <div class="pt-toggle-row pt-mb-sm">
+                                <label class="pt-toggle">
+                                    <input type="checkbox" @bind="_modelo.TodosLosVendedores" />
+                                    <span class="pt-toggle-slider"></span>
+                                </label>
+                                <span class="pt-toggle-label">Todos los vendedores</span>
+                            </div>
+                            @if (!_modelo.TodosLosVendedores)
+                            {
+                                <div class="pt-search-wrap pt-mb-sm">
+                                    <input class="pt-input pt-input-sm pt-input-search" @bind="_vendedorSearch" @bind:event="oninput"
+                                           placeholder="Buscar vendedor…" />
+                                    <svg class="pt-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                </div>
+                                <div class="pt-vendor-list">
+                                    <table class="pt-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:32px"></th>
+                                                <th style="width:56px">Cód.</th>
+                                                <th>Nombre</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (VendedorListadoDto v in VendedoresFiltrados)
+                                            {
+                                                bool sel = _modelo.VendedoresIDs.Contains(v.VendedoresID);
+                                                <tr class="@(sel ? "pt-tr-sel" : "")">
+                                                    <td>
+                                                        <input type="checkbox" class="pt-chk-box" checked="@sel"
+                                                               @onchange="e => ToggleSet(_modelo.VendedoresIDs, v.VendedoresID, (bool)e.Value!)" />
+                                                    </td>
+                                                    <td class="pt-mono">@v.Codigo</td>
+                                                    <td style="font-size:0.82rem;">@v.Nombre</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <span class="pt-section-count pt-mt-xs">@_modelo.VendedoresIDs.Count seleccionados de @_vendedores.Count</span>
+                            }
+                        </div>
+
+                        <hr class="pt-seg-divider" />
+
+                        @* Listas de precios *@
+                        <div class="pt-seg-subsection">
+                            <p class="pt-subsection-label">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/></svg>
+                                Listas de precios
+                            </p>
+                            <div class="pt-toggle-row pt-mb-sm">
+                                <label class="pt-toggle">
+                                    <input type="checkbox" @bind="_modelo.TodasLasListasPrecios" />
+                                    <span class="pt-toggle-slider"></span>
+                                </label>
+                                <span class="pt-toggle-label">Todas las listas de precios</span>
+                            </div>
+                            @if (!_modelo.TodasLasListasPrecios)
+                            {
+                                @if (_listasPrecios.Count == 0)
+                                {
+                                    <p class="pt-hint">Sin listas disponibles.</p>
+                                }
+                                else
+                                {
+                                    <div class="pt-checklist">
+                                        @foreach (ListaPreciosDto lp in _listasPrecios)
+                                        {
+                                            bool sel = _modelo.ListasPreciosIDs.Contains(lp.ListasPreciosID);
+                                            <label class="pt-check-item @(sel ? "pt-check-item-sel" : "")">
+                                                <input type="checkbox" checked="@sel"
+                                                       @onchange="e => ToggleSet(_modelo.ListasPreciosIDs, lp.ListasPreciosID, (bool)e.Value!)" />
+                                                @lp.Nombre
+                                            </label>
+                                        }
+                                    </div>
+                                    <span class="pt-section-count pt-mt-xs">@_modelo.ListasPreciosIDs.Count de @_listasPrecios.Count seleccionadas</span>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                @* ─── PASO 4: Cantidades y arrastre ─── *@
+                <div class="pt-card">
+                    <div class="pt-card-header">
+                        <span class="pt-card-title">
+                            <span class="pt-step-badge">4</span>
+                            Cantidades y condiciones
+                        </span>
+                    </div>
+                    <span class="pt-section-intro">Define cuántos combos se pueden vender y las condiciones de entrega</span>
+
+                    @* Grilla de cantidades *@
+                    <div class="pt-cantidades-grid">
+                        <div class="pt-cant-item">
+                            <label>Cantidad de combos</label>
+                            <input type="number" class="pt-input" @bind="_modelo.Cantidad" min="1" step="1" placeholder="0" />
+                            <span class="pt-field-note">Unidades disponibles para venta</span>
+                        </div>
+                        <div class="pt-cant-item">
+                            <label>Máximo total</label>
+                            <input type="number" class="pt-input" @bind="_modelo.CupoTotal" min="0" step="1" placeholder="0 = sin límite" />
+                            <span class="pt-field-note">Cupo máximo del combo</span>
+                        </div>
+                        <div class="pt-cant-item">
+                            <label>Máximo por punto de venta</label>
+                            <input type="number" class="pt-input" @bind="_modelo.CantidadXPDV" min="0" step="1" placeholder="0 = sin límite" />
+                            <span class="pt-field-note">Límite por cliente / PDV</span>
+                        </div>
+                        <div class="pt-cant-item">
+                            <label>Cantidad gratis por combo</label>
+                            <input type="number" class="pt-input" @bind="_modelo.CantidadSinCargo" min="0" step="1" placeholder="0" />
+                            <span class="pt-field-note">Unidades sin cargo que se entregan</span>
+                        </div>
+                    </div>
+
+                    @* Cantidad Facturada (solo lectura) *@
+                    <div class="pt-kpi-mini">
+                        <div class="pt-kpi-mini-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        </div>
+                        <div>
+                            <span class="pt-kpi-mini-label">Combos ya vendidos o en pedidos</span>
+                            <strong class="pt-kpi-mini-value">@_modelo.CantidadFacturada</strong>
+                        </div>
+                    </div>
+
+                    @* Arrastre *@
+                    <div class="pt-arrastre-block">
+                        <p class="pt-subsection-label">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                            Condición de arrastre
+                        </p>
+
+                        <div class="pt-field-row">
+                            <div class="pt-field" style="flex: 0 0 180px;">
+                                <label>Monto de arrastre ($)</label>
+                                <input type="number" class="pt-input" @bind="_modelo.MontoArrastre" min="0" step="1" placeholder="0" />
+                                <span class="pt-field-note">Compra mínima del cliente para acceder</span>
+                            </div>
+                        </div>
+
+                        <div class="pt-arrastre-toggle-row">
+                            <label class="pt-toggle">
+                                <input type="checkbox" @bind="_modelo.TomaProdParaArrastre" />
+                                <span class="pt-toggle-slider"></span>
+                            </label>
+                            <div>
+                                <span class="pt-toggle-label-main">Arrastre por monto $</span>
+                                <span class="pt-toggle-label-desc">Habilita el control del importe de productos fuera del combo</span>
+                            </div>
+                        </div>
+
+                        @if (_modelo.TomaProdParaArrastre)
+                        {
+                            <div class="pt-arrastre-extra">
+                                <div class="pt-field" style="flex: 0 0 220px;">
+                                    <label>Importe de productos fuera del combo ($)</label>
+                                    <input type="number" class="pt-input" @bind="_modelo.ImporteProductosFuera" min="0" step="0.01" placeholder="0,00" />
+                                    <span class="pt-field-note">Importe de productos ajenos al combo que se toman en cuenta para el arrastre</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* ─── PASO 5: Opciones del combo ─── *@
+                <div class="pt-card">
+                    <div class="pt-card-header">
+                        <span class="pt-card-title">
+                            <span class="pt-step-badge">5</span>
+                            Opciones del combo
+                        </span>
+                    </div>
+                    <span class="pt-section-intro">Seleccioná las características especiales que aplican a este combo</span>
+
+                    <div class="pt-options-grid-wrap">
+                        <div class="pt-option-card @(_modelo.EsDeIntroduccion ? "pt-option-active" : "")"
+                             @onclick="() => _modelo.EsDeIntroduccion = !_modelo.EsDeIntroduccion">
+                            <div class="pt-option-icon @(_modelo.EsDeIntroduccion ? "pt-option-icon-on" : "")">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                            </div>
+                            <div class="pt-option-card-content">
+                                <span class="pt-option-card-title">Combo de introducción</span>
+                                <span class="pt-option-card-desc">Para productos o líneas nuevas en el catálogo</span>
+                            </div>
+                            <div class="pt-option-check">
+                                @if (_modelo.EsDeIntroduccion) { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> }
+                            </div>
+                        </div>
+
+                        <div class="pt-option-card @(_modelo.SoloNoCompradores ? "pt-option-active" : "")"
+                             @onclick="() => { _modelo.SoloNoCompradores = !_modelo.SoloNoCompradores; if (!_modelo.SoloNoCompradores) _modelo.SoloNoCompradoresDesde = null; }">
+                            <div class="pt-option-icon @(_modelo.SoloNoCompradores ? "pt-option-icon-on" : "")">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                            </div>
+                            <div class="pt-option-card-content">
+                                <span class="pt-option-card-title">Solo para no compradores</span>
+                                <span class="pt-option-card-desc">Clientes que no compraron previamente en un período</span>
+                            </div>
+                            <div class="pt-option-check">
+                                @if (_modelo.SoloNoCompradores) { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> }
+                            </div>
+                        </div>
+
+                        <div class="pt-option-card @(_modelo.UsarDescuentoClientes ? "pt-option-active" : "")"
+                             @onclick="() => _modelo.UsarDescuentoClientes = !_modelo.UsarDescuentoClientes">
+                            <div class="pt-option-icon @(_modelo.UsarDescuentoClientes ? "pt-option-icon-on" : "")">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+                            </div>
+                            <div class="pt-option-card-content">
+                                <span class="pt-option-card-title">Usar descuento del cliente</span>
+                                <span class="pt-option-card-desc">Aplica el descuento habitual del cliente sobre el combo</span>
+                            </div>
+                            <div class="pt-option-check">
+                                @if (_modelo.UsarDescuentoClientes) { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> }
+                            </div>
+                        </div>
+
+                        <div class="pt-option-card @(_modelo.ComboDinamico ? "pt-option-active" : "")"
+                             @onclick="() => { _modelo.ComboDinamico = !_modelo.ComboDinamico; SincronizarComboDinamico(); }">
+                            <div class="pt-option-icon @(_modelo.ComboDinamico ? "pt-option-icon-on" : "")">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                            </div>
+                            <div class="pt-option-card-content">
+                                <span class="pt-option-card-title">Combo dinámico</span>
+                                <span class="pt-option-card-desc">Los productos se organizan en grupos con cantidades variables</span>
+                            </div>
+                            <div class="pt-option-check">
+                                @if (_modelo.ComboDinamico) { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> }
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Campos condicionales de opciones *@
+                    @if (_modelo.SoloNoCompradores)
+                    {
+                        <div class="pt-conditional-field">
+                            <div class="pt-conditional-connector"></div>
+                            <div class="pt-field" style="flex:0 0 220px;">
+                                <label>No compradores desde</label>
+                                <input type="date" class="pt-input" @bind="_modelo.SoloNoCompradoresDesde" />
+                                <span class="pt-field-note">Fecha desde la cual el cliente no compró</span>
+                            </div>
+                        </div>
+                    }
+
+                    @if (_modelo.ComboDinamico)
+                    {
+                        <div class="pt-conditional-field">
+                            <div class="pt-conditional-connector"></div>
+                            <div class="pt-subcard">
+                                <div class="pt-cc-subcard-header">
+                                    <p class="pt-label-sm">Grupos dinámicos</p>
+                                    <div class="pt-cc-subcard-right">
+                                        <span class="pt-cc-dinamico-total">Total: @_modelo.CantidadDinamica</span>
+                                        <button type="button" class="pt-btn-agregar" @onclick="AgregarGrupoDinamico">+ Grupo</button>
+                                    </div>
+                                </div>
+                                <table class="pt-table pt-table-xs">
+                                    <thead><tr><th>Grupo</th><th style="width:120px">Cantidad</th></tr></thead>
+                                    <tbody>
+                                        @foreach (GrupoDinamicoFormModel grupo in _modelo.GruposDinamicos.OrderBy(g => g.Numero))
+                                        {
+                                            <tr>
+                                                <td><span class="pt-grupo-badge">Grupo @grupo.Numero</span></td>
+                                                <td>
+                                                    <input type="number" class="pt-input pt-num-input-sm" min="0" step="1"
+                                                           @bind="grupo.Cantidad" @bind:after="RecalcularCantidadDinamica" />
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @* ─── PASO 6: Productos con cargo ─── *@
+                <div class="pt-card">
+                    <div class="pt-card-header pt-card-header-cargo">
+                        <span class="pt-card-title">
+                            <span class="pt-step-badge">6</span>
+                            Productos con cargo
+                        </span>
+                        <span class="pt-badge-count">@ItemsConCargo.Count() productos</span>
+                    </div>
+                    <span class="pt-section-intro">Productos que el cliente <strong style="color:#065f46">compra y paga</strong> como parte del combo</span>
+
+                    @if (_ccAdding)
+                    {
+                        <div class="pt-cc-form">
+                            <input class="pt-input pt-input-sm"
+                                   list="productos-con-cargo-opciones"
+                                   value="@_ccProductoTexto"
+                                   @oninput="SeleccionarProductoConCargo"
+                                   placeholder="Escribí nombre o código del producto…" />
+                            <datalist id="productos-con-cargo-opciones">
+                                @foreach (ProductoDto p in _productos)
+                                {
+                                    <option value="@FormatearProductoOption(p)"></option>
+                                }
+                            </datalist>
+                            <div class="pt-cc-form-row">
+                                <div class="pt-ifield">
+                                    <label>Cantidad</label>
+                                    <input type="number" class="pt-input pt-num-input-sm" @bind="_ccCantidad" min="1" step="1" />
+                                </div>
+                                <div class="pt-ifield">
+                                    <label>Precio costo</label>
+                                    <input type="number" class="pt-input pt-num-input-sm pt-readonly" value="@FormatearPrecio(_ccPrecio)" readonly />
+                                </div>
+                                @if (_modelo.ComboDinamico)
+                                {
+                                    <div class="pt-ifield">
+                                        <label>Grupo</label>
+                                        <select class="pt-input pt-cc-select-grupo" @bind="_ccGrupo" @bind:after="SincronizarCantidadDesdeGrupo">
+                                            @foreach (int grupo in GruposComboDinamicoDisponibles)
+                                            {
+                                                <option value="@grupo">Grupo @grupo</option>
+                                            }
+                                        </select>
+                                    </div>
+                                }
+                                <div class="pt-ifield" style="align-self:flex-end; gap:0.375rem; display:flex;">
+                                    <button class="pt-btn-add" @onclick="AgregarConCargo" disabled="@(_ccProdID == 0)">Agregar</button>
+                                    <button class="pt-btn-icon-cancel" @onclick="CancelarAgregarCC" title="Cancelar">✕</button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <button class="pt-btn-add-row" @onclick="IniciarAgregarCC">+ Agregar producto con cargo</button>
+                    }
+
+                    @if (ItemsConCargo.Any())
+                    {
+                        <div style="overflow-x:auto;">
+                            <table class="pt-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:90px">Código</th>
+                                        <th>Producto</th>
+                                        <th style="width:72px; text-align:right;">Cant.</th>
+                                        <th style="width:100px; text-align:right;">Precio</th>
+                                        @if (_modelo.ComboDinamico) { <th style="width:80px; text-align:center;">Grupo</th> }
+                                        <th style="width:36px"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (ComboItemFormModel item in ItemsConCargo.ToList())
+                                    {
+                                        <tr>
+                                            <td class="pt-mono">@item.CodigoProducto</td>
+                                            <td>@item.NombreProducto</td>
+                                            <td style="text-align:right;">@item.Cantidad</td>
+                                            <td style="text-align:right;">$ @item.Precio.ToString("N2")</td>
+                                            @if (_modelo.ComboDinamico) { <td style="text-align:center;"><span class="pt-grupo-badge">@item.NroGrupoDinamico</span></td> }
+                                            <td><button class="pt-btn-rm" @onclick="() => QuitarItem(item)" title="Quitar">✕</button></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="pt-products-empty">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                            <p>Todavía no hay productos con cargo</p>
+                            <span>Usá el botón de arriba para agregar</span>
+                        </div>
+                    }
+                </div>
+
+                @* ─── PASOS 7 + 8: Productos gratis ─── *@
+                <div class="pt-two-col-equal">
+
+                    @* PASO 7: Sin cargo *@
+                    <div class="pt-card">
+                        <div class="pt-card-header pt-card-header-sincargo">
+                            <span class="pt-card-title">
+                                <span class="pt-step-badge">7</span>
+                                Productos gratis
+                            </span>
+                            <span class="pt-badge-count">@ItemsSinCargo.Count() productos</span>
+                        </div>
+                        <span class="pt-section-intro">Se entregan <strong style="color:#14532d">sin costo</strong> hasta la <em>cantidad gratis por combo</em></span>
+
+                        @if (_scAdding)
+                        {
+                            <div class="pt-cc-form">
+                                <input class="pt-input pt-input-sm"
+                                       list="productos-sin-cargo-opciones"
+                                       value="@_scProductoTexto"
+                                       @oninput="SeleccionarProductoSinCargo"
+                                       placeholder="Buscar producto…" />
+                                <datalist id="productos-sin-cargo-opciones">
+                                    @foreach (ProductoDto p in _productos) { <option value="@FormatearProductoOption(p)"></option> }
+                                </datalist>
+                                <div class="pt-cc-form-row">
+                                    <button class="pt-btn-add" @onclick="AgregarSinCargo" disabled="@(_scProdID == 0)">Agregar</button>
+                                    <button class="pt-btn-icon-cancel" @onclick="CancelarAgregarSC">✕</button>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <button class="pt-btn-add-row" @onclick="IniciarAgregarSC">+ Agregar producto gratis</button>
+                        }
+
+                        @if (ItemsSinCargo.Any())
+                        {
+                            <table class="pt-table pt-table-xs">
+                                <thead><tr><th>Código</th><th>Producto</th><th style="width:30px"></th></tr></thead>
+                                <tbody>
+                                    @foreach (ComboItemFormModel item in ItemsSinCargo.ToList())
+                                    {
+                                        <tr>
+                                            <td class="pt-mono">@item.CodigoProducto</td>
+                                            <td>@item.NombreProducto</td>
+                                            <td><button class="pt-btn-rm" @onclick="() => QuitarItem(item)" title="Quitar">✕</button></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <p class="pt-hint">Sin productos gratis aún.</p>
+                        }
+                    </div>
+
+                    @* PASO 8: Sin cargo fijo *@
+                    <div class="pt-card">
+                        <div class="pt-card-header pt-card-header-sincargofijo">
+                            <span class="pt-card-title">
+                                <span class="pt-step-badge">8</span>
+                                Productos siempre gratis
+                            </span>
+                            <span class="pt-badge-count">@ItemsSinCargoFijo.Count() productos</span>
+                        </div>
+                        <span class="pt-section-intro">Se entregan <strong style="color:#78350f">sin costo siempre</strong>, sin importar la cantidad del pedido</span>
+
+                        @if (_scfAdding)
+                        {
+                            <div class="pt-cc-form">
+                                <input class="pt-input pt-input-sm"
+                                       list="productos-sin-cargo-fijos-opciones"
+                                       value="@_scfProductoTexto"
+                                       @oninput="SeleccionarProductoSinCargoFijo"
+                                       placeholder="Buscar producto…" />
+                                <datalist id="productos-sin-cargo-fijos-opciones">
+                                    @foreach (ProductoDto p in _productos) { <option value="@FormatearProductoOption(p)"></option> }
+                                </datalist>
+                                <div class="pt-cc-form-row">
+                                    <button class="pt-btn-add" @onclick="AgregarSinCargoFijo" disabled="@(_scfProdID == 0)">Agregar</button>
+                                    <button class="pt-btn-icon-cancel" @onclick="CancelarAgregarSCF">✕</button>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <button class="pt-btn-add-row" @onclick="IniciarAgregarSCF">+ Agregar producto siempre gratis</button>
+                        }
+
+                        @if (ItemsSinCargoFijo.Any())
+                        {
+                            <table class="pt-table pt-table-xs">
+                                <thead><tr><th>Código</th><th>Producto</th><th style="width:30px"></th></tr></thead>
+                                <tbody>
+                                    @foreach (ComboItemFormModel item in ItemsSinCargoFijo.ToList())
+                                    {
+                                        <tr>
+                                            <td class="pt-mono">@item.CodigoProducto</td>
+                                            <td>@item.NombreProducto</td>
+                                            <td><button class="pt-btn-rm" @onclick="() => QuitarItem(item)" title="Quitar">✕</button></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <p class="pt-hint">Sin productos fijos aún.</p>
+                        }
+                    </div>
+                </div>
+
+            }
+
+            @* ══════════════ TAB 1: ARRASTRE ══════════════ *@
+            @if (_tab == 1)
+            {
+                <div class="pt-two-col-equal">
+                    <div class="pt-card">
+                        <div class="pt-card-header">
+                            <span class="pt-card-title">Marcas para arrastre</span>
+                        </div>
+                        <span class="pt-section-intro">Marcas (proveedores) que el cliente debe comprar para validar el arrastre</span>
+                        @if (_marcasProductos.Count == 0)
+                        {
+                            <p class="pt-hint">Sin marcas disponibles.</p>
+                        }
+                        else
+                        {
+                            <div class="pt-checklist">
+                                @foreach (MarcaProductoDto r in _marcasProductos)
+                                {
+                                    bool sel = _modelo.MarcasProductosArrastreIDs.Contains(r.MarcasProductosID);
+                                    <label class="pt-check-item @(sel ? "pt-check-item-sel" : "")">
+                                        <input type="checkbox" checked="@sel"
+                                               @onchange="e => ToggleSet(_modelo.MarcasProductosArrastreIDs, r.MarcasProductosID, (bool)e.Value!)" />
+                                        @r.Nombre
+                                    </label>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="pt-card">
+                        <div class="pt-card-header">
+                            <span class="pt-card-title">Familias para arrastre</span>
+                        </div>
+                        <span class="pt-section-intro">Familias de productos que el cliente debe comprar para validar el arrastre</span>
+                        @if (_familiaProductos.Count == 0)
+                        {
+                            <p class="pt-hint">Sin familias disponibles.</p>
+                        }
+                        else
+                        {
+                            <div class="pt-checklist">
+                                @foreach (FamiliaProductoDto m in _familiaProductos)
+                                {
+                                    bool sel = _modelo.FamiliaProductosArrastreIDs.Contains(m.FamiliaProductosID);
+                                    <label class="pt-check-item @(sel ? "pt-check-item-sel" : "")">
+                                        <input type="checkbox" checked="@sel"
+                                               @onchange="e => ToggleSet(_modelo.FamiliaProductosArrastreIDs, m.FamiliaProductosID, (bool)e.Value!)" />
+                                        @m.Nombre
+                                    </label>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @* ══════════════ TAB 2: HISTORIAL ══════════════ *@
+            @if (_tab == 2 && !_esNuevo)
+            {
+                <div class="pt-card">
+                    <div class="pt-card-header">
+                        <span class="pt-card-title">Historial de cambios</span>
+                    </div>
+                    @if (_logs.Count == 0)
+                    {
+                        <p class="pt-hint">Sin registros aún.</p>
+                    }
+                    else
+                    {
+                        <table class="pt-table">
+                            <thead>
+                                <tr><th>Fecha</th><th>Usuario</th><th>PC</th><th>Comentario</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (ComboLogDto log in _logs)
+                                {
+                                    <tr>
+                                        <td class="pt-nowrap">@log.Fecha.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@log.NombreUsuario</td>
+                                        <td class="pt-mono">@log.PC</td>
+                                        <td>@log.Comentario</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+
+                <div class="pt-field pt-mt-sm">
+                    <label>Comentario del cambio</label>
+                    <input class="pt-input" @bind="_modelo.Comentario" maxlength="500"
+                           placeholder="Describí brevemente el motivo del cambio" />
+                </div>
+            }
+
+        </div>
+
+        @* ── Pie de página con acciones (siempre visible al hacer scroll) ── *@
+        <div class="pt-sticky-footer">
+            <div class="pt-sticky-footer-left">
+                @if (!string.IsNullOrEmpty(_errorGlobal))
+                {
+                    <span class="pt-error-inline">@_errorGlobal</span>
+                }
+                else
+                {
+                    <span class="pt-footer-note-inline">
+                        <span class="pt-req">*</span> Campos obligatorios: Código, Nombre, Categoría, Tipo de clientes, Vigencia
+                    </span>
+                }
+            </div>
+            <div class="pt-sticky-footer-right">
+                <button class="pt-btn-footer-cancel" @onclick="Volver" disabled="@_guardando">Cancelar</button>
+                @if (!_esNuevo)
+                {
+                    <button class="pt-btn-footer-danger" @onclick="ConfirmarBaja" disabled="@_guardando">Dar de baja</button>
+                }
+                <button class="pt-btn-footer-save" @onclick="GuardarAsync" disabled="@_guardando">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    @(_guardando ? "Guardando…" : (_esNuevo ? "Crear combo" : "Guardar cambios"))
+                </button>
+            </div>
+        </div>
+    }
+
+    @* ── Modal confirmar baja ── *@
+    @if (_mostrarConfirmBaja)
+    {
+        <div class="pt-modal-backdrop">
+            <div class="pt-modal" style="width:440px;">
+                <div class="pt-modal-header">
+                    <span class="pt-modal-title">¿Dar de baja este combo?</span>
+                </div>
+                <div class="pt-modal-body">
+                    <p style="color:#6b7280;font-size:0.9rem;margin:0;">
+                        El combo <strong>@_modelo.Nombre</strong> dejará de aparecer en los listados activos.
+                        Esta acción puede revertirse contactando al administrador.
+                    </p>
+                </div>
+                <div class="pt-modal-footer">
+                    <button class="pt-modal-btn-cancel" @onclick="() => _mostrarConfirmBaja = false">Cancelar</button>
+                    <button class="pt-modal-btn-danger" @onclick="EjecutarBajaAsync">Sí, dar de baja</button>
+                </div>
+            </div>
+        </div>
+    }
+
+</div>
+
+@code {
+    [Parameter] public int? CombosID { get; set; }
+
+    private bool _esNuevo => CombosID is null;
+    private bool _cargando = true;
+    private bool _guardando;
+    private bool _mostrarConfirmBaja;
+    private bool _mostrarNombreAlt;
+    private string _errorGlobal = string.Empty;
+    private int _tab;
+
+    private ComboFormModel _modelo = new();
+    private List<ComboLogDto> _logs = new();
+
+    private List<MarcaProductoDto> _marcasProductos = new();
+    private List<FamiliaProductoDto> _familiaProductos = new();
+    private List<ProductoDto> _productos = new();
+    private List<VendedorListadoDto> _vendedores = new();
+    private List<ListaPreciosDto> _listasPrecios = new();
+
+    private string _vendedorSearch = string.Empty;
+    private string _ccProductoTexto = string.Empty;
+
+    private bool _ccAdding;
+    private int _ccProdID;
+    private int _ccCantidad = 1;
+    private decimal _ccPrecio;
+    private int _ccGrupo = 1;
+
+    private bool _scAdding;
+    private int _scProdID;
+    private string _scProductoTexto = string.Empty;
+
+    private bool _scfAdding;
+    private int _scfProdID;
+    private string _scfProductoTexto = string.Empty;
+
+    private Dictionary<string, string> _errores = new();
+
+    private IEnumerable<ComboItemFormModel> ItemsConCargo => _modelo.Items.Where(i => i.Tipo == 1);
+    private IEnumerable<ComboItemFormModel> ItemsSinCargo => _modelo.Items.Where(i => i.Tipo == 2);
+    private IEnumerable<ComboItemFormModel> ItemsSinCargoFijo => _modelo.Items.Where(i => i.Tipo == 3);
+
+    private int NotaChars => _modelo.Nota?.Length ?? 0;
+    private int VigenciaDias => (_modelo.FechaVigencia - _modelo.FechaInicio).Days;
+
+    private IEnumerable<VendedorListadoDto> VendedoresFiltrados => string.IsNullOrWhiteSpace(_vendedorSearch)
+        ? _vendedores
+        : _vendedores.Where(v =>
+            v.Nombre.Contains(_vendedorSearch, StringComparison.OrdinalIgnoreCase) ||
+            v.Codigo.Contains(_vendedorSearch, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<int> GruposComboDinamicoDisponibles => _modelo.GruposDinamicos
+        .Select(g => g.Numero)
+        .OrderBy(g => g);
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Las queries comparten el mismo DbContext scoped — deben ejecutarse secuencialmente
+            _marcasProductos = (await MarcasProductosQuery.HandleAsync(CancellationToken.None)).ToList();
+            _familiaProductos = (await FamiliaProductosQuery.HandleAsync(CancellationToken.None)).ToList();
+            _productos = (await ProductosQuery.HandleAsync(CancellationToken.None)).ToList();
+            _vendedores = (await VendedoresQuery.HandleAsync(CancellationToken.None)).ToList();
+            _listasPrecios = (await ListasPreciosQuery.HandleAsync(CancellationToken.None)).ToList();
+
+            if (!_esNuevo)
+            {
+                ComboDto? combo = await ObtenerQuery.HandleAsync(CombosID!.Value, CancellationToken.None);
+                if (combo is not null)
+                    CargarModelo(combo);
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorGlobal = $"Error al cargar el formulario: {ex.Message}";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private void CargarModelo(ComboDto combo)
+    {
+        _logs = combo.Logs.ToList();
+        _mostrarNombreAlt = !string.IsNullOrEmpty(combo.NombreAlternativo);
+        _modelo = new ComboFormModel
+        {
+            MarcasProductosID = combo.MarcasProductosID,
+            Nombre = combo.Nombre,
+            NombreAlternativo = combo.NombreAlternativo,
+            Codigo = combo.Codigo,
+            FechaInicio = combo.FechaInicio,
+            FechaVigencia = combo.FechaVigencia,
+            Cantidad = combo.Cantidad,
+            CantidadFacturada = combo.CantidadFacturada,
+            CantidadPorFactura = combo.CantidadPorFactura,
+            CantidadDinamica = combo.CantidadDinamica,
+            CantidadSinCargo = combo.CantidadSinCargo,
+            CantidadXPDV = combo.CantidadXPDV,
+            MontoArrastre = combo.MontoArrastre,
+            ImporteProductosFuera = combo.ImporteProductosFuera,
+            Nota = combo.Nota,
+            TomaProdParaArrastre = combo.TomaProdParaArrastre,
+            TodosLosVendedores = combo.TodosLosVendedores,
+            TodasLasListasPrecios = combo.TodasLasListasPrecios,
+            TodasLasSucursales = combo.TodasLasSucursales,
+            ClientesNumericos = combo.ClientesNumericos,
+            ClientesAlfaNumericos = combo.ClientesAlfaNumericos,
+            EsEstrategico = combo.EsEstrategico,
+            SoloNoCompradores = combo.SoloNoCompradores,
+            SoloNoCompradoresDesde = combo.SoloNoCompradoresDesde,
+            ComboDinamico = combo.ComboDinamico,
+            EsDeIntroduccion = combo.EsDeIntroduccion,
+            NoImprimir = combo.NoImprimir,
+            ImpresionResumida = combo.ImpresionResumida,
+            UsarDescuentoClientes = combo.UsarDescuentoClientes,
+            ValidarPartido = combo.ValidarPartido,
+            CupoTotal = combo.CupoTotal,
+            Items = combo.Items.Select(i => new ComboItemFormModel
+            {
+                ProductosID = i.ProductosID,
+                NombreProducto = i.NombreProducto,
+                CodigoProducto = i.CodigoProducto,
+                Cantidad = i.Cantidad,
+                Precio = i.Precio,
+                Tipo = i.Tipo,
+                Descuento1 = i.Descuento1,
+                Descuento2 = i.Descuento2,
+                NroGrupoDinamico = i.NroGrupoDinamico
+            }).ToList(),
+            VendedoresIDs = combo.VendedoresIDs.ToHashSet(),
+            ListasPreciosIDs = combo.ListasPreciosIDs.ToHashSet(),
+            SucursalesIDs = combo.SucursalesIDs.ToHashSet(),
+            MarcasProductosArrastreIDs = combo.MarcasProductosArrastreIDs.ToHashSet(),
+            FamiliaProductosArrastreIDs = combo.FamiliaProductosArrastreIDs.ToHashSet()
+        };
+
+        InicializarGruposDinamicosDesdeItems();
+    }
+
+    private static void ToggleSet(HashSet<int> set, int id, bool add)
+    {
+        if (add) set.Add(id); else set.Remove(id);
+    }
+
+    private void CancelarAgregarCC()
+    {
+        _ccAdding = false;
+        _ccProductoTexto = string.Empty;
+        _ccProdID = 0;
+        _ccCantidad = 1;
+        _ccPrecio = 0m;
+        _ccGrupo = 1;
+    }
+
+    private void IniciarAgregarCC()
+    {
+        _ccAdding = true;
+        if (_modelo.ComboDinamico)
+            SincronizarCantidadDesdeGrupo();
+    }
+
+    private void SincronizarCantidadDesdeGrupo()
+    {
+        GrupoDinamicoFormModel? grupo = _modelo.GruposDinamicos.FirstOrDefault(g => g.Numero == _ccGrupo);
+        if (grupo is not null)
+            _ccCantidad = grupo.Cantidad;
+    }
+
+    private void SincronizarComboDinamico()
+    {
+        if (_modelo.ComboDinamico)
+        {
+            if (_modelo.GruposDinamicos.Count == 0)
+            {
+                _modelo.GruposDinamicos.Add(new GrupoDinamicoFormModel
+                {
+                    Numero = 1,
+                    Cantidad = Convert.ToInt32(_modelo.CantidadDinamica)
+                });
+            }
+
+            if (_ccGrupo == 0)
+            {
+                _ccGrupo = _modelo.GruposDinamicos[0].Numero;
+            }
+
+            RecalcularCantidadDinamica();
+            return;
+        }
+
+        _modelo.CantidadDinamica = 0;
+        _modelo.GruposDinamicos.Clear();
+
+        foreach (ComboItemFormModel item in ItemsConCargo)
+        {
+            item.NroGrupoDinamico = 0;
+        }
+
+        _ccGrupo = 1;
+    }
+
+    private void AgregarGrupoDinamico()
+    {
+        int siguienteNumero = _modelo.GruposDinamicos.Count == 0
+            ? 1
+            : _modelo.GruposDinamicos.Max(g => g.Numero) + 1;
+
+        _modelo.GruposDinamicos.Add(new GrupoDinamicoFormModel
+        {
+            Numero = siguienteNumero,
+            Cantidad = 0
+        });
+
+        _ccGrupo = siguienteNumero;
+        RecalcularCantidadDinamica();
+    }
+
+    private void RecalcularCantidadDinamica()
+    {
+        _modelo.CantidadDinamica = _modelo.GruposDinamicos.Sum(g => Convert.ToDecimal(g.Cantidad));
+    }
+
+    private void InicializarGruposDinamicosDesdeItems()
+    {
+        _modelo.GruposDinamicos.Clear();
+
+        if (!_modelo.ComboDinamico)
+        {
+            return;
+        }
+
+        List<int> grupos = ItemsConCargo
+            .Where(i => i.NroGrupoDinamico > 0)
+            .Select(i => i.NroGrupoDinamico)
+            .Distinct()
+            .OrderBy(g => g)
+            .ToList();
+
+        if (grupos.Count == 0)
+        {
+            _modelo.GruposDinamicos.Add(new GrupoDinamicoFormModel
+            {
+                Numero = 1,
+                Cantidad = Convert.ToInt32(_modelo.CantidadDinamica)
+            });
+        }
+        else
+        {
+            foreach (int grupo in grupos)
+            {
+                decimal cantidadGrupo = ItemsConCargo
+                    .Where(i => i.NroGrupoDinamico == grupo)
+                    .Sum(i => i.Cantidad);
+
+                _modelo.GruposDinamicos.Add(new GrupoDinamicoFormModel
+                {
+                    Numero = grupo,
+                    Cantidad = Convert.ToInt32(cantidadGrupo)
+                });
+            }
+        }
+
+        RecalcularCantidadDinamica();
+        _ccGrupo = _modelo.GruposDinamicos[0].Numero;
+    }
+
+    private void AgregarConCargo()
+    {
+        if (_ccProdID == 0) return;
+        ProductoDto? prod = _productos.FirstOrDefault(p => p.ProductosID == _ccProdID);
+        if (prod is null || _modelo.Items.Any(i => i.ProductosID == _ccProdID && i.Tipo == 1)) return;
+        _modelo.Items.Add(new ComboItemFormModel
+        {
+            ProductosID = prod.ProductosID,
+            NombreProducto = prod.Nombre,
+            CodigoProducto = prod.Codigo,
+            Cantidad = _ccCantidad,
+            Precio = _ccPrecio,
+            Tipo = 1,
+            NroGrupoDinamico = _modelo.ComboDinamico ? _ccGrupo : 0
+        });
+        _ccProdID = 0;
+        _ccCantidad = 1;
+        _ccPrecio = 0m;
+        _ccGrupo = 1;
+        _ccProductoTexto = string.Empty;
+        _ccAdding = false;
+    }
+
+    private void SeleccionarProductoConCargo(ChangeEventArgs args)
+    {
+        _ccProductoTexto = args.Value?.ToString() ?? string.Empty;
+
+        ProductoDto? productoSeleccionado = _productos.FirstOrDefault(p =>
+            string.Equals(FormatearProductoOption(p), _ccProductoTexto, StringComparison.OrdinalIgnoreCase));
+
+        _ccProdID = productoSeleccionado?.ProductosID ?? 0;
+        _ccPrecio = productoSeleccionado?.PrecioCosto ?? 0m;
+    }
+
+    private static string FormatearProductoOption(ProductoDto producto) => $"[{producto.Codigo}] {producto.Nombre}";
+    private static string FormatearPrecio(decimal precio) => precio.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+
+    private void IniciarAgregarSC()
+    {
+        _scAdding = !_scAdding;
+        if (_scAdding) { _scProductoTexto = string.Empty; _scProdID = 0; }
+    }
+
+    private void CancelarAgregarSC()
+    {
+        _scAdding = false;
+        _scProductoTexto = string.Empty;
+        _scProdID = 0;
+    }
+
+    private void SeleccionarProductoSinCargo(ChangeEventArgs args)
+    {
+        _scProductoTexto = args.Value?.ToString() ?? string.Empty;
+        ProductoDto? prod = _productos.FirstOrDefault(p =>
+            string.Equals(FormatearProductoOption(p), _scProductoTexto, StringComparison.OrdinalIgnoreCase));
+        _scProdID = prod?.ProductosID ?? 0;
+    }
+
+    private void AgregarSinCargo()
+    {
+        if (_scProdID == 0) return;
+        ProductoDto? prod = _productos.FirstOrDefault(p => p.ProductosID == _scProdID);
+        if (prod is null || _modelo.Items.Any(i => i.ProductosID == _scProdID && i.Tipo == 2)) return;
+        _modelo.Items.Add(new ComboItemFormModel
+        {
+            ProductosID = prod.ProductosID,
+            NombreProducto = prod.Nombre,
+            CodigoProducto = prod.Codigo,
+            Cantidad = 1m,
+            Precio = 0m,
+            Tipo = 2
+        });
+        _scProdID = 0;
+        _scProductoTexto = string.Empty;
+        _scAdding = false;
+    }
+
+    private void IniciarAgregarSCF()
+    {
+        _scfAdding = !_scfAdding;
+        if (_scfAdding) { _scfProductoTexto = string.Empty; _scfProdID = 0; }
+    }
+
+    private void CancelarAgregarSCF()
+    {
+        _scfAdding = false;
+        _scfProductoTexto = string.Empty;
+        _scfProdID = 0;
+    }
+
+    private void SeleccionarProductoSinCargoFijo(ChangeEventArgs args)
+    {
+        _scfProductoTexto = args.Value?.ToString() ?? string.Empty;
+        ProductoDto? prod = _productos.FirstOrDefault(p =>
+            string.Equals(FormatearProductoOption(p), _scfProductoTexto, StringComparison.OrdinalIgnoreCase));
+        _scfProdID = prod?.ProductosID ?? 0;
+    }
+
+    private void AgregarSinCargoFijo()
+    {
+        if (_scfProdID == 0) return;
+        ProductoDto? prod = _productos.FirstOrDefault(p => p.ProductosID == _scfProdID);
+        if (prod is null || _modelo.Items.Any(i => i.ProductosID == _scfProdID && i.Tipo == 3)) return;
+        _modelo.Items.Add(new ComboItemFormModel
+        {
+            ProductosID = prod.ProductosID,
+            NombreProducto = prod.Nombre,
+            CodigoProducto = prod.Codigo,
+            Cantidad = 1m,
+            Precio = 0m,
+            Tipo = 3
+        });
+        _scfProdID = 0;
+        _scfProductoTexto = string.Empty;
+        _scfAdding = false;
+    }
+
+    private void QuitarItem(ComboItemFormModel item) => _modelo.Items.Remove(item);
+
+    private async Task GuardarAsync()
+    {
+        _errores.Clear();
+        _errorGlobal = string.Empty;
+
+        if (!Validar()) return;
+
+        _guardando = true;
+
+        try
+        {
+            if (_esNuevo)
+            {
+                int id = await CrearHandler.HandleAsync(MapearCrear(), CancellationToken.None);
+                Nav.NavigateTo($"/combos/{id}");
+            }
+            else
+            {
+                await EditarHandler.HandleAsync(MapearEditar(), CancellationToken.None);
+                Nav.NavigateTo("/combos");
+            }
+        }
+        catch (Domain.Exceptions.ComboCodigoExistenteException)
+        {
+            _errores["Codigo"] = $"El código '{_modelo.Codigo}' ya existe en esta empresa.";
+            _tab = 0;
+        }
+        catch (Domain.Exceptions.ComboSinTipoClienteException)
+        {
+            _errores["Clientes"] = "Seleccione al menos un tipo de cliente.";
+            _tab = 0;
+        }
+        catch (Domain.Exceptions.ComboSinListaPrecioException)
+        {
+            _errores["Clientes"] = "Agregue al menos un producto o active 'Todas las listas de precios'.";
+            _tab = 0;
+        }
+        catch
+        {
+            _errorGlobal = "Error al guardar. Intente nuevamente.";
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private void ConfirmarBaja() => _mostrarConfirmBaja = true;
+
+    private async Task EjecutarBajaAsync()
+    {
+        _mostrarConfirmBaja = false;
+        _guardando = true;
+        try
+        {
+            await BajaHandler.HandleAsync(CombosID!.Value, CancellationToken.None);
+            Nav.NavigateTo("/combos");
+        }
+        catch { _errorGlobal = "Error al dar de baja."; }
+        finally { _guardando = false; }
+    }
+
+    private bool Validar()
+    {
+        if (string.IsNullOrWhiteSpace(_modelo.Codigo))
+            _errores["Codigo"] = "El código es obligatorio.";
+        else if (_modelo.Codigo.Length > 10)
+            _errores["Codigo"] = "Máximo 10 caracteres.";
+
+        if (string.IsNullOrWhiteSpace(_modelo.Nombre))
+            _errores["Nombre"] = "El nombre es obligatorio.";
+
+        if (_modelo.MarcasProductosID is null or 0)
+            _errores["MarcasProductosID"] = "Seleccione una categoría.";
+
+        if (_modelo.FechaVigencia < _modelo.FechaInicio)
+            _errores["FechaVigencia"] = "La vigencia debe ser posterior al inicio.";
+
+        if (!_modelo.ClientesNumericos && !_modelo.ClientesAlfaNumericos)
+            _errores["TipoCliente"] = "Seleccione al menos un tipo de cliente (Salón o Distribución).";
+
+        if (!_modelo.TodasLasListasPrecios && _modelo.ListasPreciosIDs.Count == 0)
+            _errores["ListasPrecios"] = "Seleccione al menos una lista de precios o active 'Todas las listas'.";
+
+        return _errores.Count == 0;
+    }
+
+    private CrearComboCommand MapearCrear() => new()
+    {
+        MarcasProductosID = _modelo.MarcasProductosID,
+        Nombre = _modelo.Nombre.Trim(),
+        NombreAlternativo = string.IsNullOrWhiteSpace(_modelo.NombreAlternativo) ? null : _modelo.NombreAlternativo.Trim(),
+        Codigo = _modelo.Codigo.Trim().ToUpperInvariant(),
+        FechaInicio = _modelo.FechaInicio,
+        FechaVigencia = _modelo.FechaVigencia,
+        Cantidad = _modelo.Cantidad,
+        CantidadPorFactura = _modelo.CantidadPorFactura,
+        CantidadDinamica = _modelo.CantidadDinamica,
+        CantidadSinCargo = _modelo.CantidadSinCargo,
+        CantidadXPDV = _modelo.CantidadXPDV,
+        MontoArrastre = _modelo.MontoArrastre,
+        ImporteProductosFuera = _modelo.ImporteProductosFuera,
+        Nota = string.IsNullOrWhiteSpace(_modelo.Nota) ? null : _modelo.Nota.Trim(),
+        TomaProdParaArrastre = _modelo.TomaProdParaArrastre,
+        TodosLosVendedores = _modelo.TodosLosVendedores,
+        TodasLasListasPrecios = _modelo.TodasLasListasPrecios,
+        TodasLasSucursales = _modelo.TodasLasSucursales,
+        ClientesNumericos = _modelo.ClientesNumericos,
+        ClientesAlfaNumericos = _modelo.ClientesAlfaNumericos,
+        EsEstrategico = _modelo.EsEstrategico,
+        SoloNoCompradores = _modelo.SoloNoCompradores,
+        SoloNoCompradoresDesde = _modelo.SoloNoCompradoresDesde,
+        ComboDinamico = _modelo.ComboDinamico,
+        EsDeIntroduccion = _modelo.EsDeIntroduccion,
+        NoImprimir = _modelo.NoImprimir,
+        ImpresionResumida = _modelo.ImpresionResumida,
+        UsarDescuentoClientes = _modelo.UsarDescuentoClientes,
+        ValidarPartido = _modelo.ValidarPartido,
+        CupoTotal = _modelo.CupoTotal,
+        Comentario = string.IsNullOrWhiteSpace(_modelo.Comentario) ? "Alta" : _modelo.Comentario.Trim(),
+        Items = _modelo.Items.Select(i => new ComboItemInput(i.ProductosID, i.Cantidad, i.Precio, i.Tipo, i.Descuento1, i.Descuento2, _modelo.ComboDinamico ? i.NroGrupoDinamico : 0)).ToList(),
+        VendedoresIDs = _modelo.TodosLosVendedores ? [] : _modelo.VendedoresIDs.ToList(),
+        ListasPreciosIDs = _modelo.TodasLasListasPrecios ? [] : _modelo.ListasPreciosIDs.ToList(),
+        SucursalesIDs = _modelo.TodasLasSucursales ? [] : _modelo.SucursalesIDs.ToList(),
+        MarcasProductosArrastreIDs = _modelo.MarcasProductosArrastreIDs.ToList(),
+        FamiliaProductosArrastreIDs = _modelo.FamiliaProductosArrastreIDs.ToList()
+    };
+
+    private EditarComboCommand MapearEditar() => new()
+    {
+        CombosID = CombosID!.Value,
+        MarcasProductosID = _modelo.MarcasProductosID,
+        Nombre = _modelo.Nombre.Trim(),
+        NombreAlternativo = string.IsNullOrWhiteSpace(_modelo.NombreAlternativo) ? null : _modelo.NombreAlternativo.Trim(),
+        Codigo = _modelo.Codigo.Trim().ToUpperInvariant(),
+        FechaInicio = _modelo.FechaInicio,
+        FechaVigencia = _modelo.FechaVigencia,
+        Cantidad = _modelo.Cantidad,
+        CantidadPorFactura = _modelo.CantidadPorFactura,
+        CantidadDinamica = _modelo.CantidadDinamica,
+        CantidadSinCargo = _modelo.CantidadSinCargo,
+        CantidadXPDV = _modelo.CantidadXPDV,
+        MontoArrastre = _modelo.MontoArrastre,
+        ImporteProductosFuera = _modelo.ImporteProductosFuera,
+        Nota = string.IsNullOrWhiteSpace(_modelo.Nota) ? null : _modelo.Nota.Trim(),
+        TomaProdParaArrastre = _modelo.TomaProdParaArrastre,
+        TodosLosVendedores = _modelo.TodosLosVendedores,
+        TodasLasListasPrecios = _modelo.TodasLasListasPrecios,
+        TodasLasSucursales = _modelo.TodasLasSucursales,
+        ClientesNumericos = _modelo.ClientesNumericos,
+        ClientesAlfaNumericos = _modelo.ClientesAlfaNumericos,
+        EsEstrategico = _modelo.EsEstrategico,
+        SoloNoCompradores = _modelo.SoloNoCompradores,
+        SoloNoCompradoresDesde = _modelo.SoloNoCompradoresDesde,
+        ComboDinamico = _modelo.ComboDinamico,
+        EsDeIntroduccion = _modelo.EsDeIntroduccion,
+        NoImprimir = _modelo.NoImprimir,
+        ImpresionResumida = _modelo.ImpresionResumida,
+        UsarDescuentoClientes = _modelo.UsarDescuentoClientes,
+        ValidarPartido = _modelo.ValidarPartido,
+        CupoTotal = _modelo.CupoTotal,
+        Comentario = string.IsNullOrWhiteSpace(_modelo.Comentario) ? "Modificación" : _modelo.Comentario.Trim(),
+        Items = _modelo.Items.Select(i => new ComboItemInput(i.ProductosID, i.Cantidad, i.Precio, i.Tipo, i.Descuento1, i.Descuento2, _modelo.ComboDinamico ? i.NroGrupoDinamico : 0)).ToList(),
+        VendedoresIDs = _modelo.TodosLosVendedores ? [] : _modelo.VendedoresIDs.ToList(),
+        ListasPreciosIDs = _modelo.TodasLasListasPrecios ? [] : _modelo.ListasPreciosIDs.ToList(),
+        SucursalesIDs = _modelo.TodasLasSucursales ? [] : _modelo.SucursalesIDs.ToList(),
+        MarcasProductosArrastreIDs = _modelo.MarcasProductosArrastreIDs.ToList(),
+        FamiliaProductosArrastreIDs = _modelo.FamiliaProductosArrastreIDs.ToList()
+    };
+
+    private void Volver() => Nav.NavigateTo("/combos");
+
+    private bool TieneError(string campo) => _errores.ContainsKey(campo);
+    private string Error(string campo) => _errores.TryGetValue(campo, out string? msg) ? msg : string.Empty;
+
+    private sealed class ComboFormModel
+    {
+        public int? MarcasProductosID { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string? NombreAlternativo { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public DateTime FechaInicio { get; set; } = DateTime.Today;
+        public DateTime FechaVigencia { get; set; } = DateTime.Today.AddMonths(1);
+        public int Cantidad { get; set; } = 1;
+        public int CantidadFacturada { get; set; }
+        public decimal CantidadPorFactura { get; set; }
+        public decimal CantidadDinamica { get; set; }
+        public decimal CantidadSinCargo { get; set; } = 1m;
+        public decimal CantidadXPDV { get; set; }
+        public decimal MontoArrastre { get; set; }
+        public decimal? ImporteProductosFuera { get; set; }
+        public string? Nota { get; set; }
+        public bool TomaProdParaArrastre { get; set; }
+        public bool TodosLosVendedores { get; set; } = true;
+        public bool TodasLasListasPrecios { get; set; } = true;
+        public bool TodasLasSucursales { get; set; } = true;
+        public bool ClientesNumericos { get; set; } = true;
+        public bool ClientesAlfaNumericos { get; set; } = true;
+        public bool EsEstrategico { get; set; }
+        public bool SoloNoCompradores { get; set; }
+        public DateTime? SoloNoCompradoresDesde { get; set; }
+        public bool ComboDinamico { get; set; }
+        public bool EsDeIntroduccion { get; set; }
+        public bool NoImprimir { get; set; }
+        public bool ImpresionResumida { get; set; }
+        public bool UsarDescuentoClientes { get; set; }
+        public bool ValidarPartido { get; set; } = true;
+        public int? CupoTotal { get; set; }
+        public string Comentario { get; set; } = string.Empty;
+        public List<ComboItemFormModel> Items { get; set; } = new();
+        public List<GrupoDinamicoFormModel> GruposDinamicos { get; set; } = new();
+        public List<ComboFechaFormModel> Fechas { get; set; } = new();
+        public HashSet<int> VendedoresIDs { get; set; } = new();
+        public HashSet<int> ListasPreciosIDs { get; set; } = new();
+        public HashSet<int> SucursalesIDs { get; set; } = new();
+        public HashSet<int> MarcasProductosArrastreIDs { get; set; } = new();
+        public HashSet<int> FamiliaProductosArrastreIDs { get; set; } = new();
+    }
+
+    private sealed class GrupoDinamicoFormModel
+    {
+        public int Numero { get; set; }
+        public int Cantidad { get; set; }
+    }
+
+    private sealed class ComboItemFormModel
+    {
+        public int ProductosID { get; set; }
+        public string NombreProducto { get; set; } = string.Empty;
+        public string CodigoProducto { get; set; } = string.Empty;
+        public decimal Cantidad { get; set; } = 1m;
+        public decimal Precio { get; set; }
+        public byte Tipo { get; set; } = 1;
+        public decimal Descuento1 { get; set; }
+        public decimal Descuento2 { get; set; }
+        public int NroGrupoDinamico { get; set; }
+    }
+
+    private sealed class ComboFechaFormModel
+    {
+        public DateTime FechaInicio { get; set; }
+        public DateTime FechaFin { get; set; }
+    }
+}

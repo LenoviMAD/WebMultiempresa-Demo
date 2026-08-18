@@ -1,0 +1,10 @@
+@* Componente para mostrar un mensaje de error de campo *@
+
+@if (!string.IsNullOrEmpty(Mensaje))
+{
+    <span class="text-danger small">@Mensaje</span>
+}
+
+@code {
+    [Parameter] public string? Mensaje { get; set; }
+}

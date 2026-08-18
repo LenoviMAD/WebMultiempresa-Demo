@@ -1,0 +1,42 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.DotSettings.user
+launchSettings.json
+
+# Logs y diagnóstico
+*.log
+*.trx
+
+# Secretos — NUNCA commitear
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+appsettings.Development.json
+secrets.json
+
+# Publish output
+publish/
+out/
+
+# NuGet
+*.nupkg
+packages/
+.nuget/
+
+# Coverage
+coverage/
+TestResults/
+*.coveragexml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archivos de base de datos local (LocalDB)
+*.mdf
+*.ldf

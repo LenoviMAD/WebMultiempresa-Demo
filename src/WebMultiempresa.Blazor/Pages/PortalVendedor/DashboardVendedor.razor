@@ -1,0 +1,141 @@
+@page "/portal-vendedor/dashboard"
+@layout EmptyLayout
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Portal
+@using WebMultiempresa.Infrastructure.Persistence
+@inject ObtenerResumenPortalVendedorQuery ResumenQuery
+@inject VendedorContexto                  VendedorCtx
+@inject EmpresaContexto                   EmpresaCtx
+@inject NavigationManager                 Nav
+
+@if (_cargando)
+{
+    <div style="text-align:center; margin-top:80px;">
+        <span class="spinner-border" role="status"></span>
+        <p style="margin-top:8px; color:gray;">Cargando...</p>
+    </div>
+}
+else if (_resumen is null)
+{
+    <div style="text-align:center; margin-top:60px;">
+        <p>No hay datos disponibles.</p>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="Salir">Salir</button>
+    </div>
+}
+else
+{
+    <div class="container" style="max-width:480px; padding:1rem 1rem 2rem;">
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+            <h6 style="color:#5555FF; margin:0;">@_resumen.NombreVendedor</h6>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="Salir">Salir</button>
+        </div>
+
+        @* Coeficiente de comisión *@
+        <div style="text-align:center; margin-bottom:0.25rem;">
+            @if (_resumen.CoeficientePositivo)
+            {
+                <h2 style="color:LawnGreen; font-weight:bold; text-shadow:1px 1px 3px #000;">
+                    + @_resumen.CoeficienteComision.ToString("N0") %
+                </h2>
+            }
+            else
+            {
+                <h2 style="color:OrangeRed; font-weight:bold; text-shadow:1px 1px 3px #000;">
+                    - @_resumen.CoeficienteComision.ToString("N0") %
+                </h2>
+            }
+        </div>
+
+        @* Estrellas *@
+        <div style="display:flex; justify-content:center; gap:6px; margin-bottom:1rem;">
+            @foreach (PortalEstrellaResumenDto e in _resumen.Estrellas)
+            {
+                <span style="font-size:2rem; opacity:@(e.EstaEncendidaHoy ? "1" : "0.2");">★</span>
+            }
+        </div>
+
+        @* Promedios *@
+        <h6 style="text-align:center; color:#5555FF; margin-bottom:0.75rem;">Promedio del período</h6>
+
+        @foreach (PortalEstrellaResumenDto e in _resumen.Estrellas)
+        {
+            <div style="margin-bottom:0.75rem; cursor:pointer;"
+                 @onclick="() => IrADetalle(e.VendedorEstrellasDefinicionesID)">
+                <div style="font-weight:700; font-size:0.9rem; margin-bottom:2px;">@e.Nombre</div>
+                <span style="background-color:@ColorEstrella(e); padding:3px 14px;
+                             font-size:1.4rem; border-radius:4px; display:inline-block;">
+                    @e.PromedioValor.ToString("N2")
+                </span>
+                @if (e.ObjetivoMensual.HasValue)
+                {
+                    <small style="color:gray; margin-left:8px;">Obj: @e.ObjetivoMensual.Value.ToString("N1")</small>
+                }
+            </div>
+        }
+
+        <hr style="margin:1rem 0;" />
+
+        @* Botones operativos *@
+        <div class="d-grid gap-2">
+            <button class="btn btn-primary"
+                    @onclick='() => Nav.NavigateTo("/portal-vendedor/clientes-dia-siguiente")'>
+                Clientes Día Siguiente
+            </button>
+        </div>
+
+    </div>
+}
+
+@code {
+    private PortalVendedorResumenDto? _resumen;
+    private bool                      _cargando = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        if (VendedorCtx.VendedoresID is null)
+        {
+            Nav.NavigateTo("/portal-vendedor/login");
+            return;
+        }
+
+        DateTime hoy = DateTime.Today;
+        DateTime fechaDesde;
+        DateTime fechaHasta;
+
+        if (hoy.Day <= 2)
+        {
+            fechaDesde = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-1);
+            fechaHasta = new DateTime(hoy.Year, hoy.Month, 1).AddDays(-1);
+        }
+        else
+        {
+            fechaDesde = new DateTime(hoy.Year, hoy.Month, 1);
+            fechaHasta = hoy.AddDays(-1);
+        }
+
+        _resumen = await ResumenQuery.HandleAsync(
+            VendedorCtx.VendedoresID.Value,
+            fechaDesde,
+            fechaHasta,
+            CancellationToken.None);
+
+        _cargando = false;
+        StateHasChanged();
+    }
+
+    private void IrADetalle(int definicionId) =>
+        Nav.NavigateTo($"/portal-vendedor/detalle-estrella/{definicionId}");
+
+    private void Salir() =>
+        Nav.NavigateTo("/portal-vendedor/login");
+
+    private static string ColorEstrella(PortalEstrellaResumenDto e)
+    {
+        if (!e.ObjetivoMensual.HasValue || e.ObjetivoMensual.Value == 0) return "#cccccc";
+        decimal pct = e.PromedioValor / e.ObjetivoMensual.Value;
+        return pct >= 1m ? "LawnGreen" : pct >= 0.75m ? "Yellow" : "OrangeRed";
+    }
+}

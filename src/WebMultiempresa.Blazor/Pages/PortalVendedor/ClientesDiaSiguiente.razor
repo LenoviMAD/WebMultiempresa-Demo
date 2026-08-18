@@ -1,0 +1,82 @@
+@page "/portal-vendedor/clientes-dia-siguiente"
+@layout EmptyLayout
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Portal
+@using WebMultiempresa.Infrastructure.Persistence
+@inject ListarClientesDiaSiguienteQuery ClientesQuery
+@inject VendedorContexto                VendedorCtx
+@inject NavigationManager               Nav
+
+<div class="container" style="max-width:480px; padding:1rem;">
+    <button class="btn btn-outline-secondary btn-sm mb-3"
+            @onclick='() => Nav.NavigateTo("/portal-vendedor/dashboard")'>
+        ← Volver
+    </button>
+
+    <h5 style="text-align:center; color:#5555FF;">Clientes — @_diaNombre</h5>
+
+    @if (_cargando)
+    {
+        <div style="text-align:center; margin-top:40px;">
+            <span class="spinner-border" role="status"></span>
+        </div>
+    }
+    else if (!_clientes.Any())
+    {
+        <p style="text-align:center; color:gray; margin-top:2rem;">
+            No hay clientes programados para mañana.
+        </p>
+    }
+    else
+    {
+        <p style="color:gray; font-size:0.85rem;">@_clientes.Count cliente(s)</p>
+
+        @foreach (PortalClienteDiaSiguienteDto c in _clientes)
+        {
+            <div class="card mb-2 shadow-sm">
+                <div class="card-body py-2 px-3">
+                    <div class="fw-semibold">@c.Codigo — @c.Nombre</div>
+                    @if (!string.IsNullOrEmpty(c.Direccion))
+                    {
+                        <div style="font-size:0.83rem; color:#666;">@c.Direccion</div>
+                    }
+                    @if (!string.IsNullOrEmpty(c.Telefono))
+                    {
+                        <div style="font-size:0.83rem;">📞 @c.Telefono</div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private IReadOnlyList<PortalClienteDiaSiguienteDto> _clientes  = [];
+    private bool                                         _cargando  = true;
+    private string                                       _diaNombre = string.Empty;
+
+    private static readonly string[] NombresDias =
+        ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        if (VendedorCtx.VendedoresID is null)
+        {
+            Nav.NavigateTo("/portal-vendedor/login");
+            return;
+        }
+
+        DayOfWeek dow  = DateTime.Today.AddDays(1).DayOfWeek;
+        int diaSemana  = (int)dow == 0 ? 6 : (int)dow - 1;
+        _diaNombre     = NombresDias[diaSemana];
+
+        _clientes = await ClientesQuery.HandleAsync(
+            VendedorCtx.VendedoresID.Value,
+            CancellationToken.None);
+
+        _cargando = false;
+        StateHasChanged();
+    }
+}

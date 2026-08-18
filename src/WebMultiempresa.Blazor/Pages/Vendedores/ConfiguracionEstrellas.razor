@@ -1,0 +1,431 @@
+@page "/vendedores/configuracion-estrellas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using WebMultiempresa.Application.Commands.Vendedores
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Vendedores
+
+@inject ListarEstrellasConfigQuery ConfigQuery
+@inject GuardarEstrellasDefinicionCommandHandler GuardarHandler
+@inject BajaEstrellasDefinicionCommandHandler BajaHandler
+
+<PageTitle>Configuración de estrellas</PageTitle>
+
+<div class="page-header">
+    <h2>Plan de Incentivos</h2>
+    <a href="/vendedores" class="btn-secondary">&#8592; Volver</a>
+</div>
+
+@if (_cargando)
+{
+    <div class="loading">Cargando...</div>
+}
+else
+{
+    <div class="layout-dos">
+
+        <!-- ══════════ CARD IZQUIERDO: Definiciones ══════════ -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-titulo">Estrellas</span>
+                <span class="card-sub">Nombre y objetivo de cada estrella</span>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_errorDef))
+            {
+                <div class="alert-error">@_errorDef</div>
+            }
+
+            @if (_items.Any())
+            {
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>N°</th>
+                            <th>Nombre / Regla</th>
+                            <th>Objetivo mensual</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (VendedorEstrellasConfigDto item in _items)
+                        {
+                            @if (_editandoDefId == item.DefinicionId)
+                            {
+                                <tr class="tr-edit">
+                                    <td class="td-num">⭐ @item.NumeroEstrella</td>
+                                    <td><input class="inp-wide" type="text" @bind="_editDef.Nombre" placeholder="Ej: Horas en ruta ≥ 4h" /></td>
+                                    <td><input class="inp-sm" type="number" step="0.01" @bind="_editDef.Objetivo" placeholder="—" /></td>
+                                    <td class="td-acciones">
+                                        <button class="btn-ok" type="button" @onclick="GuardarEdicionDefAsync" disabled="@_procesandoDef">✓</button>
+                                        <button class="btn-cancel" type="button" @onclick="CancelarEdicionDef">✕</button>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td class="td-num">⭐ @item.NumeroEstrella</td>
+                                    <td class="td-nombre">@item.Nombre</td>
+                                    <td class="td-obj">@(item.ObjetivoMensual.HasValue ? item.ObjetivoMensual.Value.ToString("N2") : "—")</td>
+                                    <td class="td-acciones">
+                                        <button class="btn-link" type="button" @onclick="() => IniciarEdicionDef(item)">Editar</button>
+                                        <button class="btn-link btn-danger" type="button" @onclick="() => ConfirmarBaja(item)" disabled="@_procesandoDef">Quitar</button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p class="empty-state">No hay estrellas configuradas todavía.</p>
+            }
+
+            <!-- Agregar nueva estrella — sin campo de número (auto) -->
+            <div class="add-section">
+                <div class="add-titulo">Agregar estrella N°@(_items.Count + 1)</div>
+                <div class="add-row">
+                    <div class="add-group add-group-wide">
+                        <label>Nombre / Regla</label>
+                        <input class="inp-full" type="text" @bind="_nuevaDef.Nombre"
+                               placeholder="Ej: Horas en ruta ≥ 4h" />
+                    </div>
+                    <div class="add-group">
+                        <label>Objetivo mensual</label>
+                        <input class="inp-sm" type="number" step="0.01" @bind="_nuevaDef.Objetivo" placeholder="—" />
+                    </div>
+                    <div class="add-group add-group-btn">
+                        <label>&nbsp;</label>
+                        <button class="btn-primary" type="button" @onclick="AgregarAsync"
+                                disabled="@(_procesandoDef || string.IsNullOrWhiteSpace(_nuevaDef.Nombre))">
+                            @(_procesandoDef ? "..." : "Agregar")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════ CARD DERECHO: Coeficientes ══════════ -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-titulo">Coeficientes de comisión</span>
+                <span class="card-sub">Multiplicador por cada estrella</span>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_errorCoef))
+            {
+                <div class="alert-error">@_errorCoef</div>
+            }
+
+            @if (_items.Any())
+            {
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>N°</th>
+                            <th>Coeficiente</th>
+                            <th>Efecto</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (VendedorEstrellasConfigDto item in _items)
+                        {
+                            @if (_editandoCoefId == item.CoeficienteId)
+                            {
+                                <tr class="tr-edit">
+                                    <td class="td-num">⭐ @item.NumeroEstrella</td>
+                                    <td><input class="inp-sm" type="number" step="0.0001" @bind="_editCoefValor" /></td>
+                                    <td class="td-efecto">@DescribirEfecto(_editCoefValor)</td>
+                                    <td class="td-acciones">
+                                        <button class="btn-ok" type="button" @onclick="GuardarEdicionCoefAsync" disabled="@_procesandoCoef">✓</button>
+                                        <button class="btn-cancel" type="button" @onclick="() => _editandoCoefId = null">✕</button>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td class="td-num">⭐ @item.NumeroEstrella</td>
+                                    <td class="td-coef @CssCoef(item.CoeficienteComision)">@item.CoeficienteComision.ToString("N4")</td>
+                                    <td class="td-efecto">@DescribirEfecto(item.CoeficienteComision)</td>
+                                    <td class="td-acciones">
+                                        <button class="btn-link" type="button" @onclick="() => IniciarEdicionCoef(item)">Editar</button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+                <div class="coef-nota">El coeficiente se crea automáticamente al agregar una estrella.</div>
+            }
+            else
+            {
+                <p class="empty-state">Los coeficientes aparecen aquí al agregar estrellas.</p>
+            }
+        </div>
+
+    </div>
+}
+
+<!-- Modal confirmar baja -->
+@if (_itemParaBaja is not null)
+{
+    <div class="modal-backdrop" @onclick="CancelarModal">
+        <div class="modal-confirm" @onclick:stopPropagation="true">
+            <h3>Quitar estrella</h3>
+            <p>¿Quitar la estrella <strong>N°@_itemParaBaja.NumeroEstrella — @_itemParaBaja.Nombre</strong>?<br />
+               <span class="modal-aviso">También se eliminará su coeficiente de comisión.</span>
+            </p>
+            <div class="modal-footer">
+                <button class="btn-secondary" @onclick="CancelarModal">Cancelar</button>
+                <button class="btn-danger-solid" @onclick="EjecutarBajaAsync" disabled="@_procesandoDef">
+                    @(_procesandoDef ? "..." : "Quitar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+    .page-header h2 { margin: 0; font-size: 1.5rem; font-weight: 700; color: #1e3a5f; }
+
+    .layout-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; align-items: start; }
+    @@media (max-width: 960px) { .layout-dos { grid-template-columns: 1fr; } }
+
+    .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); overflow: hidden; }
+    .card-header { padding: 0.875rem 1.25rem; background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
+    .card-titulo { display: block; font-weight: 700; font-size: 0.95rem; color: #1e3a5f; }
+    .card-sub { display: block; font-size: 0.8rem; color: #9ca3af; margin-top: 0.1rem; }
+
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .data-table th { background: #f8fafc; padding: 0.55rem 0.875rem; text-align: left; font-weight: 600; color: #374151; border-bottom: 1px solid #e5e7eb; font-size: 0.8rem; }
+    .data-table td { padding: 0.55rem 0.875rem; border-bottom: 1px solid #f3f4f6; color: #1f2937; vertical-align: middle; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: #f9fafb; }
+    .tr-edit td { background: #eff6ff !important; }
+
+    .td-num { font-weight: 700; color: #374151; white-space: nowrap; }
+    .td-nombre { min-width: 140px; }
+    .td-obj { text-align: right; color: #6b7280; }
+    .td-coef { font-family: monospace; font-weight: 700; text-align: right; }
+    .td-efecto { font-size: 0.82rem; white-space: nowrap; }
+    .td-acciones { white-space: nowrap; text-align: right; }
+    .coef-alto  { color: #16a34a; }
+    .coef-bajo  { color: #dc2626; }
+    .coef-neutro { color: #6b7280; }
+
+    .inp-sm { width: 90px; padding: 0.35rem 0.5rem; border: 1px solid #d1d5db; border-radius: 5px; font-size: 0.85rem; }
+    .inp-wide { width: 190px; padding: 0.35rem 0.5rem; border: 1px solid #d1d5db; border-radius: 5px; font-size: 0.85rem; }
+    .inp-full { width: 100%; padding: 0.4rem 0.6rem; border: 1px solid #d1d5db; border-radius: 5px; font-size: 0.875rem; box-sizing: border-box; }
+
+    .btn-ok     { background: #16a34a; color: #fff; border: none; border-radius: 4px; padding: 0.3rem 0.6rem; font-size: 0.82rem; cursor: pointer; }
+    .btn-ok:hover:not(:disabled) { background: #15803d; }
+    .btn-ok:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-cancel { background: #6b7280; color: #fff; border: none; border-radius: 4px; padding: 0.3rem 0.6rem; font-size: 0.82rem; cursor: pointer; margin-left: 4px; }
+    .btn-cancel:hover { background: #4b5563; }
+    .btn-link   { background: none; border: none; color: #2563eb; font-size: 0.82rem; cursor: pointer; padding: 0; }
+    .btn-link:hover:not(:disabled) { text-decoration: underline; }
+    .btn-link:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-danger { color: #dc2626; margin-left: 8px; }
+
+    .add-section { padding: 0.875rem 1.25rem; border-top: 2px solid #e5e7eb; background: #f8fafc; }
+    .add-titulo { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #6b7280; margin-bottom: 0.625rem; letter-spacing: 0.05em; }
+    .add-row { display: flex; gap: 0.625rem; align-items: flex-end; flex-wrap: wrap; }
+    .add-group { display: flex; flex-direction: column; gap: 0.25rem; }
+    .add-group label { font-size: 0.78rem; font-weight: 600; color: #374151; }
+    .add-group-wide { flex: 1; min-width: 160px; }
+    .add-group-btn { justify-content: flex-end; }
+
+    .coef-nota { font-size: 0.78rem; color: #9ca3af; padding: 0.625rem 0.875rem; border-top: 1px solid #f3f4f6; text-align: center; }
+
+    .btn-primary { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 0.45rem 1.125rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-secondary { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.875rem; cursor: pointer; text-decoration: none; }
+    .btn-secondary:hover { background: #e5e7eb; }
+
+    .empty-state { padding: 1.5rem; text-align: center; color: #9ca3af; font-size: 0.875rem; margin: 0; }
+    .loading { padding: 2rem; text-align: center; color: #6b7280; }
+    .alert-error { background: #fef2f2; border-left: 4px solid #dc2626; color: #991b1b; padding: 0.6rem 1.25rem; font-size: 0.875rem; }
+
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-confirm { background: #fff; border-radius: 10px; padding: 1.5rem; width: 400px; max-width: 95vw; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+    .modal-confirm h3 { margin: 0 0 0.75rem; font-size: 1.05rem; color: #1e3a5f; }
+    .modal-confirm p { margin: 0 0 1.25rem; color: #374151; font-size: 0.9rem; line-height: 1.5; }
+    .modal-aviso { font-size: 0.82rem; color: #6b7280; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 0.625rem; }
+    .btn-danger-solid { background: #dc2626; color: #fff; border: none; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    .btn-danger-solid:hover:not(:disabled) { background: #b91c1c; }
+    .btn-danger-solid:disabled { opacity: 0.6; cursor: not-allowed; }
+</style>
+
+@code {
+    private List<VendedorEstrellasConfigDto> _items = [];
+
+    private int? _editandoDefId;
+    private bool _procesandoDef;
+    private string _errorDef = string.Empty;
+
+    private int? _editandoCoefId;
+    private decimal _editCoefValor;
+    private bool _procesandoCoef;
+    private string _errorCoef = string.Empty;
+
+    private bool _cargando = true;
+    private VendedorEstrellasConfigDto? _itemParaBaja;
+
+    private DefEditModel _editDef = new();
+    private DefNuevaModel _nuevaDef = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _items = (await ConfigQuery.HandleAsync(CancellationToken.None)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _errorDef = $"Error al cargar la configuración: {ex.Message}";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    // ── Definiciones ──────────────────────────────────────────────────────────
+    private void IniciarEdicionDef(VendedorEstrellasConfigDto item)
+    {
+        _editandoDefId = item.DefinicionId;
+        _editDef = new DefEditModel { Nombre = item.Nombre, Objetivo = item.ObjetivoMensual };
+    }
+
+    private void CancelarEdicionDef() => _editandoDefId = null;
+
+    private async Task GuardarEdicionDefAsync()
+    {
+        VendedorEstrellasConfigDto? item = _items.FirstOrDefault(x => x.DefinicionId == _editandoDefId);
+        if (item is null) return;
+        _procesandoDef = true;
+        _errorDef = string.Empty;
+        try
+        {
+            await GuardarHandler.HandleAsync(new GuardarEstrellasDefinicionCommand
+            {
+                DefinicionId    = item.DefinicionId,
+                CoeficienteId   = item.CoeficienteId > 0 ? item.CoeficienteId : null,
+                Nombre          = _editDef.Nombre,
+                ObjetivoMensual = _editDef.Objetivo,
+                // Mantiene el coeficiente actual sin tocarlo
+                CoeficienteComision = item.CoeficienteComision,
+            }, CancellationToken.None);
+            _editandoDefId = null;
+            _items = (await ConfigQuery.HandleAsync(CancellationToken.None)).ToList();
+        }
+        catch (Exception ex) { _errorDef = ex.InnerException?.Message ?? ex.Message; }
+        finally { _procesandoDef = false; }
+    }
+
+    private async Task AgregarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_nuevaDef.Nombre)) return;
+        _procesandoDef = true;
+        _errorDef = string.Empty;
+        try
+        {
+            await GuardarHandler.HandleAsync(new GuardarEstrellasDefinicionCommand
+            {
+                Nombre              = _nuevaDef.Nombre,
+                ObjetivoMensual     = _nuevaDef.Objetivo,
+                CoeficienteComision = 1m,
+            }, CancellationToken.None);
+            _nuevaDef = new DefNuevaModel();
+            _items    = (await ConfigQuery.HandleAsync(CancellationToken.None)).ToList();
+        }
+        catch (Exception ex) { _errorDef = ex.InnerException?.Message ?? ex.Message; }
+        finally { _procesandoDef = false; }
+    }
+
+    private void ConfirmarBaja(VendedorEstrellasConfigDto item) => _itemParaBaja = item;
+    private void CancelarModal() => _itemParaBaja = null;
+
+    private async Task EjecutarBajaAsync()
+    {
+        if (_itemParaBaja is null) return;
+        _procesandoDef = true;
+        _errorDef = string.Empty;
+        try
+        {
+            await BajaHandler.HandleAsync(
+                new BajaEstrellasDefinicionCommand
+                {
+                    VendedorEstrellasDefinicionesID = _itemParaBaja.DefinicionId
+                }, CancellationToken.None);
+            _itemParaBaja = null;
+            _items = (await ConfigQuery.HandleAsync(CancellationToken.None)).ToList();
+        }
+        catch (Exception ex) { _errorDef = ex.InnerException?.Message ?? ex.Message; }
+        finally { _procesandoDef = false; }
+    }
+
+    // ── Coeficientes ──────────────────────────────────────────────────────────
+    private void IniciarEdicionCoef(VendedorEstrellasConfigDto item)
+    {
+        _editandoCoefId = item.CoeficienteId;
+        _editCoefValor  = item.CoeficienteComision;
+    }
+
+    private async Task GuardarEdicionCoefAsync()
+    {
+        VendedorEstrellasConfigDto? item = _items.FirstOrDefault(x => x.CoeficienteId == _editandoCoefId);
+        if (item is null) return;
+        _procesandoCoef = true;
+        _errorCoef = string.Empty;
+        try
+        {
+            await GuardarHandler.HandleAsync(new GuardarEstrellasDefinicionCommand
+            {
+                DefinicionId        = item.DefinicionId,
+                CoeficienteId       = item.CoeficienteId > 0 ? item.CoeficienteId : null,
+                Nombre              = item.Nombre,
+                ObjetivoMensual     = item.ObjetivoMensual,
+                CoeficienteComision = _editCoefValor,
+            }, CancellationToken.None);
+            _editandoCoefId = null;
+            _items = (await ConfigQuery.HandleAsync(CancellationToken.None)).ToList();
+        }
+        catch (Exception ex) { _errorCoef = ex.InnerException?.Message ?? ex.Message; }
+        finally { _procesandoCoef = false; }
+    }
+
+    private static string DescribirEfecto(decimal coef) => coef switch
+    {
+        0m            => "❌ Sin comisión",
+        > 0m and < 1m => $"📉 -{(1m - coef) * 100m:N0}%",
+        1m            => "➡️ Normal",
+        > 1m          => $"📈 +{(coef - 1m) * 100m:N0}%",
+        _             => ""
+    };
+
+    private static string CssCoef(decimal coef) => coef switch
+    {
+        > 1m => "coef-alto",
+        < 1m => "coef-bajo",
+        _    => "coef-neutro"
+    };
+
+    private sealed class DefEditModel
+    {
+        public string   Nombre   { get; set; } = string.Empty;
+        public decimal? Objetivo { get; set; }
+    }
+
+    private sealed class DefNuevaModel
+    {
+        public string   Nombre   { get; set; } = string.Empty;
+        public decimal? Objetivo { get; set; }
+    }
+}

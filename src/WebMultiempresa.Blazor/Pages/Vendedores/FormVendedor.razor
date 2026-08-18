@@ -1,0 +1,799 @@
+@page "/vendedores/nuevo"
+@page "/vendedores/{Id:int}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using WebMultiempresa.Application.Commands.Vendedores
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Clientes
+@using WebMultiempresa.Application.Queries.ListasPrecios
+@using WebMultiempresa.Application.Queries.CategoriasComerciales
+@using WebMultiempresa.Application.Queries.Vendedores
+@inject CrearVendedorCommandHandler CrearHandler
+@inject EditarVendedorCommandHandler EditarHandler
+@inject ObtenerVendedorQuery ObtenerQuery
+@inject ListarCategoriasComercalesQuery CategoriasQuery
+@inject ListarListasVendedorQuery ListasVendedorQuery
+@inject ListarListasPreciosQuery TodasListasQuery
+@inject AgregarListaVendedorCommandHandler AgregarListaHandler
+@inject QuitarListaVendedorCommandHandler QuitarListaHandler
+@inject MarcarListaDefaultVendedorCommandHandler MarcarDefaultHandler
+@inject ListarClientesVendedorQuery ClientesVendedorQuery
+@inject ListarClientesQuery ClientesQuery
+@inject AsignarClientesVendedorCommandHandler AsignarClientesHandler
+@inject QuitarClienteVendedorCommandHandler QuitarClienteHandler
+@inject NavigationManager Nav
+
+<PageTitle>@(_esNuevo ? "Nuevo vendedor" : $"Vendedor — {_modelo.Nombre}")</PageTitle>
+
+<div class="pt-page">
+
+    <div class="pt-page-header">
+        <div class="pt-page-header-left">
+            <div class="pt-page-icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="pt-page-title">
+                    @(_esNuevo ? "Nuevo vendedor" : (_modelo.Nombre.Length > 0 ? _modelo.Nombre : "Editar vendedor"))
+                </h1>
+                <p class="pt-page-sub">
+                    @(_esNuevo ? "Alta y configuración" : $"Código: {_modelo.Codigo}")
+                </p>
+            </div>
+        </div>
+        <div class="pt-page-actions">
+            @if (!string.IsNullOrEmpty(_errorForm))
+            {
+                <span class="pt-error-inline">@_errorForm</span>
+            }
+            <a href="/vendedores" class="pt-btn-cancel">Cancelar</a>
+            <button class="pt-btn-primary" @onclick="GuardarDesdeHeaderAsync" disabled="@_guardando">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                    <polyline points="17 21 17 13 7 13 7 21"/>
+                    <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                @(_guardando ? "Guardando..." : (_esNuevo ? "Crear vendedor" : "Guardar cambios"))
+            </button>
+        </div>
+    </div>
+
+    @if (_cargando)
+    {
+        <div class="pt-loading">Cargando...</div>
+    }
+    else
+    {
+        <div class="fv-layout">
+
+            <!-- ── Columna izquierda: formulario ── -->
+            <div class="fv-col-form">
+                <EditForm Model="@_modelo" OnValidSubmit="GuardarAsync" id="fv-form">
+                    <DataAnnotationsValidator />
+
+                    <!-- Card: Datos generales -->
+                    <div class="pt-card">
+                        <div class="pt-card-header">
+                            <span class="pt-card-title">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="7" r="4"/>
+                                    <path d="M5 21v-2a7 7 0 0 1 14 0v2"/>
+                                </svg>
+                                Datos generales
+                            </span>
+                        </div>
+
+                        <div class="pt-field-row fv-row">
+                            <div class="pt-field fv-field-code">
+                                <label>Código <span class="pt-req">*</span></label>
+                                <InputText class="pt-input" @bind-Value="_modelo.Codigo" placeholder="Ej: V001" />
+                                <ValidationMessage For="@(() => _modelo.Codigo)" />
+                            </div>
+                            <div class="pt-field pt-flex1">
+                                <label>Nombre <span class="pt-req">*</span></label>
+                                <InputText class="pt-input" @bind-Value="_modelo.Nombre" placeholder="Nombre completo del vendedor" />
+                                <ValidationMessage For="@(() => _modelo.Nombre)" />
+                            </div>
+                        </div>
+
+                        <div class="pt-field fv-row">
+                            <label>WhatsApp</label>
+                            <InputText class="pt-input" @bind-Value="_modelo.WhatsApp" placeholder="Ej: 5491123456789" />
+                        </div>
+
+                        <div class="pt-field fv-row">
+                            <label>Desfase día de venta</label>
+                            <InputNumber class="pt-input fv-num" @bind-Value="_modelo.DiaInicioRuta" />
+                        </div>
+
+                        <div class="pt-field-row fv-row pt-field-row-wrap">
+                            <div class="pt-field pt-flex1">
+                                <label>Categoría comercial (Ruta)</label>
+                                <InputSelect class="pt-input pt-select"
+                                             @bind-Value="_modelo.CategoriasComercialesID"
+                                             disabled="@_modelo.VerTodasLasCategorias">
+                                    <option value="">— Sin categoría —</option>
+                                    @foreach (CategoriaComercialDto cat in _categorias)
+                                    {
+                                        <option value="@cat.CategoriasComercialesID">@cat.Nombre</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="pt-toggle-wrap fv-toggle-top">
+                                <label class="pt-toggle">
+                                    <InputCheckbox @bind-Value="_modelo.VerTodasLasCategorias" />
+                                    <span class="pt-toggle-slider"></span>
+                                </label>
+                                <span class="pt-toggle-label">Ver todas</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card: Acceso app móvil -->
+                    <div class="pt-card pt-mt-sm">
+                        <div class="pt-card-header">
+                            <span class="pt-card-title">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                                    <line x1="12" y1="18" x2="12.01" y2="18"/>
+                                </svg>
+                                Acceso app móvil
+                            </span>
+                        </div>
+
+                        <div class="pt-field fv-row">
+                            <label>Clave</label>
+                            <input type="text" class="pt-input" @bind="_modelo.Clave"
+                                   placeholder="@(_esNuevo ? "Clave de acceso a la app" : "••••••••")" />
+                        </div>
+                    </div>
+
+                </EditForm>
+            </div>
+
+            <!-- ── Columna derecha: paneles ── -->
+            <div class="fv-col-panels">
+
+                <!-- Card: Listas de precios -->
+                <div class="pt-card">
+                    <div class="pt-card-header">
+                        <span class="pt-card-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+                                <line x1="8" y1="18" x2="21" y2="18"/>
+                                <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/>
+                                <line x1="3" y1="18" x2="3.01" y2="18"/>
+                            </svg>
+                            Listas de precios
+                        </span>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_errorListas))
+                    {
+                        <div class="pt-alert-error-sm">@_errorListas</div>
+                    }
+
+                    @if (_esNuevo)
+                    {
+                        @if (!_todasListasParaCrear.Any())
+                        {
+                            <p class="pt-hint">No hay listas de precios disponibles.</p>
+                        }
+                        else
+                        {
+                            <div class="fv-checklist">
+                                @foreach (ListaPreciosDto lista in _todasListasParaCrear)
+                                {
+                                    bool sel = _listasSeleccionadas.Contains(lista.ListasPreciosID);
+                                    <label class="fv-check-item @(sel ? "fv-check-on" : "")">
+                                        <input type="checkbox" checked="@sel"
+                                               @onchange="() => ToggleLista(lista.ListasPreciosID)" />
+                                        <span class="fv-item-name">@lista.Nombre</span>
+                                        @if (sel)
+                                        {
+                                            @if (_listaDefaultId == lista.ListasPreciosID)
+                                            {
+                                                <span class="pt-badge-ok">Default</span>
+                                            }
+                                            else
+                                            {
+                                                <button class="pt-btn-text" type="button"
+                                                        @onclick="() => _listaDefaultId = lista.ListasPreciosID">
+                                                    → Default
+                                                </button>
+                                            }
+                                        }
+                                    </label>
+                                }
+                            </div>
+                            @if (_listasSeleccionadas.Count > 0)
+                            {
+                                <p class="fv-sel-hint">@_listasSeleccionadas.Count lista(s) seleccionada(s).</p>
+                            }
+                        }
+                    }
+                    else
+                    {
+                        <div class="fv-add-row fv-add-row-top">
+                            <select class="pt-input pt-input-sm fv-add-select" @bind="_agregarListaId">
+                                <option value="0">— Agregar lista —</option>
+                                @foreach (ListaPreciosDto lista in _todasListas.Where(l => !_listasAsignadasIds.Contains(l.ListasPreciosID)))
+                                {
+                                    <option value="@lista.ListasPreciosID">@lista.Nombre</option>
+                                }
+                            </select>
+                            <label class="pt-chk">
+                                <input type="checkbox" @bind="_agregarEsDefault" /> Default
+                            </label>
+                            <button class="pt-btn-add" type="button" @onclick="AgregarListaAsync"
+                                    disabled="@(_procesandoListas || _agregarListaId == 0)">
+                                @(_procesandoListas ? "..." : "Agregar")
+                            </button>
+                        </div>
+
+                        @if (!_listas.Any())
+                        {
+                            <p class="pt-hint">Sin listas asignadas.</p>
+                        }
+                        else
+                        {
+                            <table class="fv-mini-table">
+                                <tbody>
+                                    @foreach (VendedorListaPreciosDto item in _listas)
+                                    {
+                                        <tr>
+                                            <td class="fv-td-name">@item.NombreLista</td>
+                                            <td class="fv-td-badge">
+                                                @if (item.EsDefault)
+                                                {
+                                                    <span class="pt-badge-ok">Default</span>
+                                                }
+                                                else
+                                                {
+                                                    <button class="fv-btn-default" type="button"
+                                                            @onclick="() => MarcarDefaultListaAsync(item)"
+                                                            disabled="@_procesandoListas">
+                                                        ★ Default
+                                                    </button>
+                                                }
+                                            </td>
+                                            <td class="fv-td-action">
+                                                @if (!item.EsDefault)
+                                                {
+                                                    <button class="fv-btn-remove" type="button"
+                                                            @onclick="() => ConfirmarQuitarLista(item)"
+                                                            disabled="@_procesandoListas" title="Quitar">
+                                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                                    </button>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    }
+                </div>
+
+                <!-- Card: Clientes -->
+                <div class="pt-card">
+                    <div class="pt-card-header">
+                        <span class="pt-card-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                            Clientes
+                        </span>
+                        @if (!_esNuevo && _asignados.Count > 0)
+                        {
+                            <span class="pt-badge-count">@_asignados.Count asignados</span>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_errorClientes))
+                    {
+                        <div class="pt-alert-error-sm">@_errorClientes</div>
+                    }
+
+                    @if (_esNuevo)
+                    {
+                        <div class="fv-search-row">
+                            <div class="pt-search-wrap pt-flex1">
+                                <input type="text" class="pt-input pt-input-search fv-search-input"
+                                       placeholder="Buscar cliente..."
+                                       @bind="_busquedaClientes" @bind:event="oninput" />
+                                <svg class="pt-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                </svg>
+                            </div>
+                            <button class="fv-search-btn" type="button" @onclick="SeleccionarTodosClientes">Todo</button>
+                            <button class="fv-search-btn fv-search-btn-danger" type="button" @onclick="LimpiarSeleccionClientes">Limpiar</button>
+                        </div>
+                        <div class="fv-checklist">
+                            @foreach (ClienteListadoDto c in ClientesFiltradosNoAsignados)
+                            {
+                                bool sel = _seleccionados.Contains(c.ClientesID);
+                                <label class="fv-check-item @(sel ? "fv-check-on" : "")">
+                                    <input type="checkbox" checked="@sel"
+                                           @onchange="() => ToggleCliente(c.ClientesID)" />
+                                    <span class="fv-item-code">@c.Codigo</span>
+                                    <span class="fv-item-name">@c.Nombre</span>
+                                </label>
+                            }
+                            @if (!ClientesFiltradosNoAsignados.Any())
+                            {
+                                <p class="fv-hint-empty">
+                                    @(string.IsNullOrWhiteSpace(_busquedaClientes)
+                                        ? "No hay clientes disponibles."
+                                        : $"Sin resultados para \"{_busquedaClientes}\".")
+                                </p>
+                            }
+                        </div>
+                        @if (_seleccionados.Count > 0)
+                        {
+                            <p class="fv-sel-hint">@_seleccionados.Count cliente(s) seleccionado(s). Se guardarán al crear.</p>
+                        }
+                    }
+                    else
+                    {
+                        <div class="fv-clients-grid">
+
+                            <!-- Columna izquierda: disponibles -->
+                            <div>
+                                <p class="fv-clients-col-label">Disponibles</p>
+                                <div class="fv-search-row">
+                                    <div class="pt-search-wrap pt-flex1">
+                                        <input type="text" class="pt-input pt-input-search fv-search-input"
+                                               placeholder="Buscar..."
+                                               @bind="_busquedaClientes" @bind:event="oninput" />
+                                        <svg class="pt-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                        </svg>
+                                    </div>
+                                    <button class="fv-search-btn" type="button" @onclick="SeleccionarTodosClientes">Todo</button>
+                                    <button class="fv-search-btn fv-search-btn-danger" type="button" @onclick="LimpiarSeleccionClientes">Limpiar</button>
+                                </div>
+                                <div class="fv-checklist">
+                                    @foreach (ClienteListadoDto c in ClientesFiltradosNoAsignados)
+                                    {
+                                        bool sel = _seleccionados.Contains(c.ClientesID);
+                                        <label class="fv-check-item @(sel ? "fv-check-on" : "")">
+                                            <input type="checkbox" checked="@sel"
+                                                   @onchange="() => ToggleCliente(c.ClientesID)" />
+                                            <span class="fv-item-code">@c.Codigo</span>
+                                            <span class="fv-item-name">@c.Nombre</span>
+                                        </label>
+                                    }
+                                    @if (!ClientesFiltradosNoAsignados.Any())
+                                    {
+                                        <p class="fv-hint-empty">
+                                            @(string.IsNullOrWhiteSpace(_busquedaClientes)
+                                                ? "Todos los clientes ya están asignados."
+                                                : $"Sin resultados para \"{_busquedaClientes}\".")
+                                        </p>
+                                    }
+                                </div>
+                                <div class="fv-add-row">
+                                    <span class="fv-sel-count">@_seleccionados.Count sel.</span>
+                                    <button class="pt-btn-add" type="button" @onclick="AgregarClientesSeleccionadosAsync"
+                                            disabled="@(_procesandoClientes || _seleccionados.Count == 0)">
+                                        @(_procesandoClientes ? "..." : "Asignar →")
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Columna derecha: asignados -->
+                            <div>
+                                <p class="fv-clients-col-label">
+                                    Asignados
+                                    @if (_asignados.Count > 0)
+                                    {
+                                        <span class="pt-badge-count">@_asignados.Count</span>
+                                    }
+                                </p>
+                                <div class="fv-checklist fv-checklist-tall">
+                                    @foreach (ClienteAsignadoDto c in _asignados.OrderBy(x => x.Nombre))
+                                    {
+                                        <div class="fv-asignado-item">
+                                            <span class="fv-item-code">@c.Codigo</span>
+                                            <span class="fv-item-name">@c.Nombre</span>
+                                            <button class="fv-btn-remove" type="button"
+                                                    @onclick="() => ConfirmarQuitarCliente(c)"
+                                                    disabled="@_procesandoClientes" title="Quitar">
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                            </button>
+                                        </div>
+                                    }
+                                    @if (!_asignados.Any())
+                                    {
+                                        <p class="fv-hint-empty">Sin clientes asignados.</p>
+                                    }
+                                </div>
+                            </div>
+
+                        </div>
+                    }
+                </div>
+
+            </div>
+        </div>
+    }
+
+</div>
+
+<!-- Modal quitar lista -->
+@if (_listaParaQuitar is not null)
+{
+    <div class="pt-modal-backdrop" @onclick="CancelarModal">
+        <div class="pt-modal" style="width:380px;" @onclick:stopPropagation="true">
+            <div class="pt-modal-header">
+                <span class="pt-modal-title">Quitar lista</span>
+            </div>
+            <div class="pt-modal-body">
+                <p style="margin:0;color:#374151;font-size:0.9rem;">
+                    ¿Quitar la lista <strong>@_listaParaQuitar.NombreLista</strong> del vendedor?
+                </p>
+            </div>
+            <div class="pt-modal-footer">
+                <button class="pt-modal-btn-cancel" @onclick="CancelarModal">Cancelar</button>
+                <button class="pt-modal-btn-danger" @onclick="EjecutarQuitarListaAsync" disabled="@_procesandoListas">
+                    @(_procesandoListas ? "..." : "Quitar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal quitar cliente -->
+@if (_clienteParaQuitar is not null)
+{
+    <div class="pt-modal-backdrop" @onclick="CancelarModal">
+        <div class="pt-modal" style="width:380px;" @onclick:stopPropagation="true">
+            <div class="pt-modal-header">
+                <span class="pt-modal-title">Quitar cliente</span>
+            </div>
+            <div class="pt-modal-body">
+                <p style="margin:0;color:#374151;font-size:0.9rem;">
+                    ¿Quitar a <strong>@_clienteParaQuitar.Nombre</strong> del vendedor?
+                </p>
+            </div>
+            <div class="pt-modal-footer">
+                <button class="pt-modal-btn-cancel" @onclick="CancelarModal">Cancelar</button>
+                <button class="pt-modal-btn-danger" @onclick="EjecutarQuitarClienteAsync" disabled="@_procesandoClientes">
+                    @(_procesandoClientes ? "..." : "Quitar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    // ── Form ─────────────────────────────────────────────────────────────────
+    private readonly FormModel _modelo = new();
+    private List<CategoriaComercialDto> _categorias = [];
+    private bool _cargando = true;
+    private bool _guardando;
+    private string _errorForm = string.Empty;
+    private bool _esNuevo => Id is null;
+
+    // ── Listas — creación ─────────────────────────────────────────────────────
+    private List<ListaPreciosDto> _todasListasParaCrear = [];
+    private HashSet<int> _listasSeleccionadas = [];
+    private int? _listaDefaultId;
+
+    // ── Listas — edición ──────────────────────────────────────────────────────
+    private List<VendedorListaPreciosDto> _listas = [];
+    private List<ListaPreciosDto> _todasListas = [];
+    private HashSet<int> _listasAsignadasIds = [];
+    private int _agregarListaId;
+    private bool _agregarEsDefault;
+    private bool _procesandoListas;
+    private string _errorListas = string.Empty;
+    private VendedorListaPreciosDto? _listaParaQuitar;
+
+    // ── Clientes ──────────────────────────────────────────────────────────────
+    private List<ClienteListadoDto> _todosClientes = [];
+    private HashSet<int> _seleccionados = [];
+    private string _busquedaClientes = string.Empty;
+    private bool _procesandoClientes;
+    private string _errorClientes = string.Empty;
+
+    // ── Clientes — edición ────────────────────────────────────────────────────
+    private List<ClienteAsignadoDto> _asignados = [];
+    private ClienteAsignadoDto? _clienteParaQuitar;
+
+    private IEnumerable<ClienteListadoDto> ClientesFiltradosNoAsignados
+    {
+        get
+        {
+            HashSet<int> asignados = _esNuevo
+                ? []
+                : _asignados.Select(a => a.ClientesID).ToHashSet();
+
+            IEnumerable<ClienteListadoDto> disp = _todosClientes.Where(c => !asignados.Contains(c.ClientesID));
+
+            if (!string.IsNullOrWhiteSpace(_busquedaClientes))
+                disp = disp.Where(c =>
+                    c.Nombre.Contains(_busquedaClientes, StringComparison.OrdinalIgnoreCase) ||
+                    c.Codigo.Contains(_busquedaClientes, StringComparison.OrdinalIgnoreCase));
+
+            return disp;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _categorias    = (await CategoriasQuery.HandleAsync(CancellationToken.None)).ToList();
+            _todosClientes = (await ClientesQuery.HandleAsync(CancellationToken.None)).ToList();
+
+            if (_esNuevo)
+            {
+                _todasListasParaCrear = (await TodasListasQuery.HandleAsync(CancellationToken.None)).ToList();
+            }
+            else
+            {
+                VendedorDto? dto = await ObtenerQuery.HandleAsync(Id!.Value, CancellationToken.None);
+                if (dto is null) { Nav.NavigateTo("/vendedores"); return; }
+
+                _modelo.Codigo                   = dto.Codigo;
+                _modelo.Nombre                   = dto.Nombre;
+                _modelo.WhatsApp                 = dto.WhatsApp ?? string.Empty;
+                _modelo.CategoriasComercialesID  = dto.CategoriasComercialesID;
+                _modelo.VerTodasLasCategorias    = dto.VerTodasLasCategorias;
+                _modelo.Clave                    = dto.Clave ?? string.Empty;
+                _modelo.DiaInicioRuta            = dto.DiaInicioRuta;
+
+                _listas             = (await ListasVendedorQuery.HandleAsync(Id!.Value, CancellationToken.None)).ToList();
+                _todasListas        = (await TodasListasQuery.HandleAsync(CancellationToken.None)).ToList();
+                _listasAsignadasIds = _listas.Select(l => l.ListasPreciosID).ToHashSet();
+                _asignados          = (await ClientesVendedorQuery.HandleAsync(Id!.Value, CancellationToken.None)).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorForm = $"Error al cargar los datos: {ex.Message}";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private Task GuardarDesdeHeaderAsync() => GuardarAsync();
+
+    private async Task GuardarAsync()
+    {
+        _errorForm = string.Empty;
+        _guardando = true;
+        try
+        {
+            string? claveParam = string.IsNullOrWhiteSpace(_modelo.Clave) ? null : _modelo.Clave;
+
+            if (_esNuevo)
+            {
+                int nuevoId = await CrearHandler.HandleAsync(new CrearVendedorCommand
+                {
+                    Codigo                  = _modelo.Codigo,
+                    Nombre                  = _modelo.Nombre,
+                    WhatsApp                = NullIfEmpty(_modelo.WhatsApp),
+                    CategoriasComercialesID = _modelo.VerTodasLasCategorias ? null : _modelo.CategoriasComercialesID,
+                    VerTodasLasCategorias   = _modelo.VerTodasLasCategorias,
+                    Clave                   = claveParam,
+                    DiaInicioRuta           = _modelo.DiaInicioRuta,
+                }, CancellationToken.None);
+
+                foreach (int listaId in _listasSeleccionadas)
+                {
+                    await AgregarListaHandler.HandleAsync(new AgregarListaVendedorCommand
+                    {
+                        VendedoresID    = nuevoId,
+                        ListasPreciosID = listaId,
+                        EsDefault       = listaId == _listaDefaultId,
+                    }, CancellationToken.None);
+                }
+
+                if (_seleccionados.Count > 0)
+                {
+                    await AsignarClientesHandler.HandleAsync(new AsignarClientesVendedorCommand
+                    {
+                        VendedoresID = nuevoId,
+                        ClientesIDs  = _seleccionados.ToList(),
+                    }, CancellationToken.None);
+                }
+
+                Nav.NavigateTo($"/vendedores/{nuevoId}");
+                return;
+            }
+
+            await EditarHandler.HandleAsync(new EditarVendedorCommand
+            {
+                VendedoresID            = Id!.Value,
+                Codigo                  = _modelo.Codigo,
+                Nombre                  = _modelo.Nombre,
+                WhatsApp                = NullIfEmpty(_modelo.WhatsApp),
+                CategoriasComercialesID = _modelo.VerTodasLasCategorias ? null : _modelo.CategoriasComercialesID,
+                VerTodasLasCategorias   = _modelo.VerTodasLasCategorias,
+                Clave                   = claveParam,
+                DiaInicioRuta           = _modelo.DiaInicioRuta,
+            }, CancellationToken.None);
+
+            Nav.NavigateTo("/vendedores");
+        }
+        catch (Exception ex)
+        {
+            _errorForm = ex.Message;
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private static string? NullIfEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private void ToggleLista(int listaId)
+    {
+        if (!_listasSeleccionadas.Remove(listaId))
+        {
+            _listasSeleccionadas.Add(listaId);
+            if (_listaDefaultId is null)
+                _listaDefaultId = listaId;
+        }
+        else
+        {
+            if (_listaDefaultId == listaId)
+                _listaDefaultId = _listasSeleccionadas.FirstOrDefault() is int primero && primero != 0 ? primero : null;
+        }
+    }
+
+    private async Task RefrescarListasAsync()
+    {
+        _listas             = (await ListasVendedorQuery.HandleAsync(Id!.Value, CancellationToken.None)).ToList();
+        _listasAsignadasIds = _listas.Select(l => l.ListasPreciosID).ToHashSet();
+    }
+
+    private async Task AgregarListaAsync()
+    {
+        if (_agregarListaId == 0) return;
+        _procesandoListas = true;
+        _errorListas = string.Empty;
+        try
+        {
+            await AgregarListaHandler.HandleAsync(new AgregarListaVendedorCommand
+            {
+                VendedoresID    = Id!.Value,
+                ListasPreciosID = _agregarListaId,
+                EsDefault       = _agregarEsDefault,
+            }, CancellationToken.None);
+            _agregarListaId   = 0;
+            _agregarEsDefault = false;
+            await RefrescarListasAsync();
+        }
+        catch (Exception ex) { _errorListas = ex.Message; }
+        finally { _procesandoListas = false; }
+    }
+
+    private void ConfirmarQuitarLista(VendedorListaPreciosDto item) => _listaParaQuitar = item;
+
+    private async Task EjecutarQuitarListaAsync()
+    {
+        if (_listaParaQuitar is null) return;
+        _procesandoListas = true;
+        _errorListas = string.Empty;
+        try
+        {
+            await QuitarListaHandler.HandleAsync(
+                new QuitarListaVendedorCommand { VendedorListasPreciosID = _listaParaQuitar.VendedorListasPreciosID },
+                CancellationToken.None);
+            _listaParaQuitar = null;
+            await RefrescarListasAsync();
+        }
+        catch (Exception ex) { _errorListas = ex.Message; }
+        finally { _procesandoListas = false; }
+    }
+
+    private async Task MarcarDefaultListaAsync(VendedorListaPreciosDto item)
+    {
+        _procesandoListas = true;
+        _errorListas = string.Empty;
+        try
+        {
+            await MarcarDefaultHandler.HandleAsync(new MarcarListaDefaultVendedorCommand
+            {
+                VendedorListasPreciosID = item.VendedorListasPreciosID,
+                VendedoresID            = Id!.Value,
+            }, CancellationToken.None);
+            await RefrescarListasAsync();
+        }
+        catch (Exception ex) { _errorListas = ex.Message; }
+        finally { _procesandoListas = false; }
+    }
+
+    private void ToggleCliente(int clientesId)
+    {
+        if (!_seleccionados.Remove(clientesId))
+            _seleccionados.Add(clientesId);
+    }
+
+    private void SeleccionarTodosClientes()
+    {
+        foreach (ClienteListadoDto c in ClientesFiltradosNoAsignados)
+            _seleccionados.Add(c.ClientesID);
+    }
+
+    private void LimpiarSeleccionClientes() => _seleccionados.Clear();
+
+    private async Task AgregarClientesSeleccionadosAsync()
+    {
+        if (_seleccionados.Count == 0) return;
+        _procesandoClientes = true;
+        _errorClientes = string.Empty;
+        try
+        {
+            await AsignarClientesHandler.HandleAsync(new AsignarClientesVendedorCommand
+            {
+                VendedoresID = Id!.Value,
+                ClientesIDs  = _seleccionados.ToList()
+            }, CancellationToken.None);
+            _seleccionados.Clear();
+            _busquedaClientes = string.Empty;
+            _asignados = (await ClientesVendedorQuery.HandleAsync(Id!.Value, CancellationToken.None)).ToList();
+        }
+        catch (Exception ex) { _errorClientes = ex.Message; }
+        finally { _procesandoClientes = false; }
+    }
+
+    private void ConfirmarQuitarCliente(ClienteAsignadoDto cliente) => _clienteParaQuitar = cliente;
+
+    private async Task EjecutarQuitarClienteAsync()
+    {
+        if (_clienteParaQuitar is null) return;
+        _procesandoClientes = true;
+        _errorClientes = string.Empty;
+        try
+        {
+            await QuitarClienteHandler.HandleAsync(new QuitarClienteVendedorCommand
+            {
+                ClientesID   = _clienteParaQuitar.ClientesID,
+                VendedoresID = Id!.Value
+            }, CancellationToken.None);
+            _asignados.RemoveAll(a => a.ClientesID == _clienteParaQuitar.ClientesID);
+            _clienteParaQuitar = null;
+        }
+        catch (Exception ex) { _errorClientes = ex.Message; }
+        finally { _procesandoClientes = false; }
+    }
+
+    private void CancelarModal()
+    {
+        _listaParaQuitar   = null;
+        _clienteParaQuitar = null;
+    }
+
+    private sealed class FormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "El código es obligatorio.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(50)]
+        public string Codigo { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "El nombre es obligatorio.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(200)]
+        public string Nombre { get; set; } = string.Empty;
+
+        public string WhatsApp { get; set; } = string.Empty;
+        public int? CategoriasComercialesID { get; set; }
+        public bool VerTodasLasCategorias { get; set; }
+        public string Clave { get; set; } = string.Empty;
+        public int DiaInicioRuta { get; set; }
+    }
+}

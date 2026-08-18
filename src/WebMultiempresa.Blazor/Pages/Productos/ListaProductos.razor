@@ -1,0 +1,226 @@
+@page "/productos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using WebMultiempresa.Application.DTOs
+@using WebMultiempresa.Application.Queries.Productos
+@inject ListarProductosQuery ProductosQuery
+@inject ObtenerProductoQuery ObtenerQuery
+
+<PageTitle>Productos</PageTitle>
+
+<div class="pt-page">
+    <div class="pt-page-header">
+        <div class="pt-page-header-left">
+            <div class="pt-page-icon">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V11"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="pt-page-title">Productos</h1>
+                <p class="pt-page-sub">Catálogo de productos activos</p>
+            </div>
+        </div>
+        <div class="pt-page-actions">
+            <a href="/productos/nuevo" class="pt-btn-primary">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                </svg>
+                Nuevo producto
+            </a>
+        </div>
+    </div>
+
+    @if (_cargando)
+    {
+        <div class="pt-loading">Cargando productos...</div>
+    }
+    else if (_productos.Count == 0)
+    {
+        <div class="pt-empty-state">No hay productos activos.</div>
+    }
+    else
+    {
+        <div class="pt-filter-row">
+            <div class="pt-search-wrap pt-flex1" style="max-width:380px;">
+                <input type="text"
+                       class="pt-input pt-input-search"
+                       placeholder="Buscar por nombre o código..."
+                       @bind="_filtro"
+                       @bind:event="oninput" />
+                <svg class="pt-search-icon" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="m21 21-4.35-4.35"/>
+                </svg>
+            </div>
+            <span class="pt-result-count">@ProductosFiltrados.Count resultado@(ProductosFiltrados.Count == 1 ? "" : "s")</span>
+        </div>
+
+        <div class="pt-table-wrap">
+            <table class="pt-table">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th style="text-align:right;">Precio</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (ProductoDto p in ProductosFiltrados)
+                    {
+                        <tr>
+                            <td class="pt-mono">@p.Codigo</td>
+                            <td>@p.Nombre</td>
+                            <td class="pt-td-precio">
+                                <div class="lp-precio-cell">
+                                    @if (p.PrecioCosto.HasValue)
+                                    {
+                                        <span>@p.PrecioCosto.Value.ToString("N2")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pt-td-empty">—</span>
+                                    }
+                                    <button class="lp-eye-btn"
+                                            type="button"
+                                            title="Ver precios por lista"
+                                            @onclick="() => AbrirPreciosAsync(p)">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                            <circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </td>
+                            <td class="pt-td-actions">
+                                <a href="/productos/@p.ProductosID" class="pt-row-btn">
+                                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5m-1.414-9.414a2 2 0 1 1 2.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                    Editar
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="pt-alert-error" role="alert">@_error</div>
+    }
+</div>
+
+@if (_mostrarModalPrecios)
+{
+    <div class="pt-modal-backdrop" @onclick="CerrarModal">
+        <div class="pt-modal" style="width:420px;" @onclick:stopPropagation="true">
+            <div class="pt-modal-header">
+                <h3 class="pt-modal-title">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="opacity:.8;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 0 1 0 2.828l-7 7a2 2 0 0 1-2.828 0l-7-7A2 2 0 0 1 3 12V7a4 4 0 0 1 4-4z"/>
+                    </svg>
+                    Precios — @_modalNombre
+                </h3>
+                <button class="pt-modal-close" @onclick="CerrarModal">✕</button>
+            </div>
+            <div class="pt-modal-body" style="padding:0; gap:0;">
+                @if (_cargandoPrecios)
+                {
+                    <div class="pt-loading" style="padding:2rem;">Cargando precios...</div>
+                }
+                else if (_modalPrecios.Count == 0)
+                {
+                    <p class="pt-hint" style="padding:1.25rem 1.5rem; margin:0;">Sin precios cargados para este producto.</p>
+                }
+                else
+                {
+                    <table class="pt-table pt-table-xs">
+                        <thead>
+                            <tr>
+                                <th>Lista de precios</th>
+                                <th style="text-align:right;">Precio final</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (ProductoPrecioDto precio in _modalPrecios)
+                            {
+                                <tr>
+                                    <td>@precio.NombreLista</td>
+                                    <td style="text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:#002b62;">
+                                        @precio.PrecioFinal.ToString("N2")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+            <div class="pt-modal-footer">
+                <button class="pt-modal-btn-cancel" @onclick="CerrarModal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ProductoDto> _productos = new();
+    private bool _cargando = true;
+    private string _error = string.Empty;
+    private string _filtro = string.Empty;
+
+    private bool _mostrarModalPrecios;
+    private bool _cargandoPrecios;
+    private string _modalNombre = string.Empty;
+    private List<ProductoPrecioDto> _modalPrecios = new();
+
+    private List<ProductoDto> ProductosFiltrados =>
+        string.IsNullOrWhiteSpace(_filtro)
+            ? _productos
+            : _productos
+                .Where(p => p.Nombre.Contains(_filtro, StringComparison.OrdinalIgnoreCase)
+                         || p.Codigo.Contains(_filtro, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            IReadOnlyList<ProductoDto> resultado = await ProductosQuery.HandleAsync(CancellationToken.None);
+            _productos = resultado.ToList();
+        }
+        catch
+        {
+            _error = "Error al cargar los productos. Verifique la conexión.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private async Task AbrirPreciosAsync(ProductoDto producto)
+    {
+        _modalNombre = producto.Nombre;
+        _modalPrecios = new List<ProductoPrecioDto>();
+        _cargandoPrecios = true;
+        _mostrarModalPrecios = true;
+
+        try
+        {
+            ProductoDto? dto = await ObtenerQuery.HandleAsync(producto.ProductosID, CancellationToken.None);
+            _modalPrecios = dto?.Precios?.ToList() ?? new List<ProductoPrecioDto>();
+        }
+        finally
+        {
+            _cargandoPrecios = false;
+        }
+    }
+
+    private void CerrarModal()
+    {
+        _mostrarModalPrecios = false;
+        _modalPrecios = new List<ProductoPrecioDto>();
+    }
+}

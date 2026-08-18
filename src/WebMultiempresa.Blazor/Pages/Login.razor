@@ -1,0 +1,324 @@
+@page "/login"
+@layout WebMultiempresa.Blazor.Shared.EmptyLayout
+@using WebMultiempresa.Application.Commands.Auth
+@using WebMultiempresa.Blazor.Auth
+@inject LoginCommandHandler LoginHandler
+@inject BlazorAuthStateProvider AuthProvider
+@inject NavigationManager Nav
+
+<PageTitle>WebMultiempresa — Iniciar sesión</PageTitle>
+
+<div class="vx-login-wrapper">
+
+    <div class="vx-login-header">
+        <img src="img/vendixIcono.png" alt="WebMultiempresa" class="vx-logo" />
+        <p class="vx-subtitle">Portal de administración</p>
+    </div>
+
+    <div class="vx-login-card">
+
+        <EditForm Model="@_modelo" OnValidSubmit="HandleLoginAsync">
+            <DataAnnotationsValidator />
+
+            <div class="vx-input-wrap">
+                <div class="vx-input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                </div>
+                <InputText id="email"
+                           class="vx-input"
+                           @bind-Value="_modelo.Email"
+                           placeholder="Correo electrónico"
+                           autocomplete="username" />
+            </div>
+            <ValidationMessage For="@(() => _modelo.Email)" class="vx-val" />
+
+            <div class="vx-input-wrap">
+                <div class="vx-input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                </div>
+                <InputText id="password"
+                           type="@(_mostrarPass ? "text" : "password")"
+                           class="vx-input"
+                           @bind-Value="_modelo.Password"
+                           placeholder="Contraseña"
+                           autocomplete="current-password" />
+                <button type="button" class="vx-input-toggle" @onclick="() => _mostrarPass = !_mostrarPass" tabindex="-1">
+                    @if (_mostrarPass)
+                    {
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                            <line x1="1" y1="1" x2="23" y2="23"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    }
+                </button>
+            </div>
+            <ValidationMessage For="@(() => _modelo.Password)" class="vx-val" />
+
+            @if (!string.IsNullOrEmpty(_errorMensaje))
+            {
+                <div class="vx-error" role="alert">@_errorMensaje</div>
+            }
+
+            <button type="submit" class="vx-btn-login" disabled="@_cargando">
+                @if (_cargando)
+                {
+                    <span>Ingresando...</span>
+                }
+                else
+                {
+                    <span>Ingresar</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                        <polyline points="10 17 15 12 10 7"/>
+                        <line x1="15" y1="12" x2="3" y2="12"/>
+                    </svg>
+                }
+            </button>
+
+        </EditForm>
+
+    </div>
+
+    <div class="vx-version">
+        <img src="img/vendixIcono.png" alt="" class="vx-version-icon" />
+        WebMultiempresa Portal
+    </div>
+
+</div>
+
+<style>
+    .vx-login-wrapper {
+        min-height: 100vh;
+        min-height: -webkit-fill-available;
+        background-image: url('../img/fondoIndex.png');
+        background-size: cover;
+        background-position: center;
+        background-attachment: scroll;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+        overflow-x: hidden;
+        padding: 2rem 1rem;
+        gap: 0.5rem;
+    }
+
+    /* ── Header ── */
+    .vx-login-header {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        z-index: 2;
+    }
+
+    .vx-logo {
+        max-width: 220px;
+        height: auto;
+        filter: drop-shadow(0 2px 8px rgba(0,0,0,0.22));
+    }
+
+    .vx-subtitle {
+        font-size: 0.95rem;
+        color: #1f2937;
+        font-weight: 500;
+        margin: 0.4rem 0 0;
+        text-shadow: 0 1px 3px rgba(255,255,255,0.85);
+        letter-spacing: 0.01em;
+    }
+
+    /* ── Card ── */
+    .vx-login-card {
+        background: rgba(255, 255, 255, 0.97);
+        border-radius: 24px;
+        padding: 2rem 1.75rem 1.5rem;
+        width: 90%;
+        max-width: 390px;
+        box-shadow: 0 12px 40px rgba(0, 43, 98, 0.28);
+        z-index: 3;
+        position: relative;
+        border: 1.5px solid rgba(255,255,255,0.7);
+    }
+
+    /* ── Inputs ── */
+    .vx-input-wrap {
+        display: flex;
+        align-items: center;
+        background: #fff;
+        border: 1.5px solid #d1d5db;
+        border-radius: 12px;
+        margin-bottom: 0.875rem;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        overflow: hidden;
+    }
+    .vx-input-wrap:focus-within {
+        border-color: #09388B;
+        box-shadow: 0 0 0 4px rgba(9, 56, 139, 0.10);
+    }
+
+    .vx-input-icon {
+        padding: 0 0.875rem;
+        color: #09388B;
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+        background: rgba(9, 56, 139, 0.06);
+        align-self: stretch;
+        border-right: 1px solid #e5e7eb;
+    }
+
+    .vx-input {
+        flex: 1;
+        border: none;
+        outline: none;
+        font-size: 1rem;
+        color: #1f2937;
+        background: transparent;
+        padding: 0.75rem 0.875rem;
+        min-width: 0;
+        font-family: inherit;
+    }
+    .vx-input::placeholder { color: #9ca3af; }
+
+    .vx-input-toggle {
+        background: none;
+        border: none;
+        color: #9ca3af;
+        padding: 0 0.875rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        align-self: stretch;
+        transition: color 0.15s;
+    }
+    .vx-input-toggle:hover { color: #374151; }
+
+    /* ── Validación ── */
+    .vx-val {
+        display: block;
+        font-size: 0.8rem;
+        color: #dc2626;
+        margin: -0.5rem 0 0.625rem 0.25rem;
+    }
+
+    /* ── Error ── */
+    .vx-error {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #dc2626;
+        padding: 0.625rem 0.875rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        margin-bottom: 0.875rem;
+        text-align: center;
+    }
+
+    /* ── Botón ── */
+    .vx-btn-login {
+        width: 100%;
+        background: linear-gradient(90deg, #09388B 0%, #165DC9 100%);
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        padding: 0.8rem 1.25rem;
+        font-size: 1.05rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+        box-shadow: 0 8px 20px rgba(9, 56, 139, 0.38);
+        transition: transform 0.15s, box-shadow 0.15s;
+        font-family: inherit;
+    }
+    .vx-btn-login:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 26px rgba(9, 56, 139, 0.46);
+    }
+    .vx-btn-login:active:not(:disabled) { transform: scale(0.98); }
+    .vx-btn-login:disabled { opacity: 0.65; cursor: not-allowed; }
+
+    /* ── Versión ── */
+    .vx-version {
+        position: absolute;
+        bottom: 12px;
+        right: 16px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: rgba(255,255,255,0.6);
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        letter-spacing: 0.5px;
+        pointer-events: none;
+        user-select: none;
+    }
+    .vx-version-icon {
+        width: 18px;
+        height: 18px;
+        object-fit: contain;
+        opacity: 0.75;
+    }
+</style>
+
+@code {
+    private readonly LoginFormModel _modelo = new();
+    private string _errorMensaje = string.Empty;
+    private bool _cargando;
+    private bool _mostrarPass;
+
+    private async Task HandleLoginAsync()
+    {
+        _errorMensaje = string.Empty;
+        _cargando = true;
+
+        try
+        {
+            LoginCommand command = new(_modelo.Email, _modelo.Password);
+            Application.DTOs.LoginResultDto result = await LoginHandler.HandleAsync(
+                command, CancellationToken.None);
+
+            await AuthProvider.LoginAsync(result.Token);
+            Nav.NavigateTo("/");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _errorMensaje = "Correo o contraseña incorrectos.";
+        }
+        catch
+        {
+            _errorMensaje = "Error al conectar con el servidor. Intente nuevamente.";
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private sealed class LoginFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "El correo es obligatorio.")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "Ingrese un correo válido.")]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "La contraseña es obligatoria.")]
+        public string Password { get; set; } = string.Empty;
+    }
+}
